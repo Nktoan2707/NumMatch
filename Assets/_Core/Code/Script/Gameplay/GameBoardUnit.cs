@@ -1,0 +1,123 @@
+﻿using System;
+using Unity.VisualScripting;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace NumMatch
+{
+    public enum GameBoardUnitType
+    {
+        One, Two, Three, Four, Five, Six, Seven, Eight, Nine
+    }
+
+    public enum GameBoardUnitState
+    {
+        UnInitialized,
+        Initialized,
+        Selected,
+        MatchedInProgress,
+        Matched
+    }
+
+    public class GameBoardUnit : MonoBehaviour
+    {
+        private SOGameBoardUnit m_unitSO;
+        public SOGameBoardUnit UnitSO { get { return m_unitSO; } }
+
+        private GameBoardUnitState m_currentState;
+
+        public GameBoardUnitState CurrentState
+        {
+            get
+            {
+                return m_currentState;
+            }
+            set
+            {
+                if (value == m_currentState) {
+                    return;
+                }
+                var oldState = m_currentState;
+                m_currentState = value;
+
+                switch (m_currentState)
+                {
+                    case GameBoardUnitState.UnInitialized:
+                        button.enabled = false;
+                        break;
+                    case GameBoardUnitState.Initialized:
+                        button.enabled = true;
+
+                        break;
+                    case GameBoardUnitState.Selected:
+                        button.enabled = true;
+
+                        break;
+                    case GameBoardUnitState.MatchedInProgress:
+                        button.enabled = false;
+
+                        break;
+                    case GameBoardUnitState.Matched:
+                        button.enabled = false;
+
+                        break;
+                }
+                //print("Changed state: " + oldState + "--->" + value);
+                OnCurrentStateChanged?.Invoke(this, new OnCurrentStateChangedEventArgs
+                {
+                    oldState = oldState,
+                    newState = m_currentState,
+                });
+            }
+        }
+
+        public class OnCurrentStateChangedEventArgs : EventArgs
+        {
+            public GameBoardUnitState oldState;
+            public GameBoardUnitState newState;
+        }
+
+        public event EventHandler<OnCurrentStateChangedEventArgs> OnCurrentStateChanged;
+
+        private GameBoard board;
+
+        [SerializeField] private Button button;
+
+        private void Awake()
+        {
+            m_currentState = GameBoardUnitState.UnInitialized;
+        }
+
+        private void Start()
+        {
+        }
+
+        public void Initialize(GameBoard board, SOGameBoardUnit unitSO)
+        {
+            this.board = board;
+            this.m_unitSO = unitSO;
+            CurrentState = GameBoardUnitState.Initialized;
+            button.onClick.AddListener(() =>
+            {
+                board.OnAUnitClicked(this);
+            });
+        }
+
+        public void ToggleSelected(bool isSelected)
+        {
+            if (isSelected) {
+                CurrentState = GameBoardUnitState.Selected;
+            } else
+            {
+                CurrentState = GameBoardUnitState.Initialized;
+
+            }
+        }
+
+        public bool IsOccupied()
+        {
+            return CurrentState != GameBoardUnitState.UnInitialized &&
+                CurrentState != GameBoardUnitState.Matched;
+        }
+    }
+}
