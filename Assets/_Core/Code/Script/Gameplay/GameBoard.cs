@@ -22,6 +22,7 @@ namespace NumMatch
         public const int MATCH_TOTAL_VALUE = 10;
         public const int INITIAL_BOARD_LENGTH = NUMBER_OF_COLUMNS * 5;
         public const int MINIMAL_BOARD_GRID_LENGTH = NUMBER_OF_COLUMNS * 15;
+        public const int RETRY_LIMIT_GENERATE_BOARD = 50;
 
 
         public static GameBoard Instance { get; private set; }
@@ -83,22 +84,19 @@ namespace NumMatch
                 allUnitList.Add(unit);
             }
         }
-
         private List<(GameBoardUnitType, GameBoardUnitType)> GetAllMatchablePairs()
         {
             var pairs = new List<(GameBoardUnitType, GameBoardUnitType)>();
 
             // Match cùng loại
             foreach (GameBoardUnitType t in Enum.GetValues(typeof(GameBoardUnitType)))
-            {
                 pairs.Add((t, t));
-            }
 
             // Match theo tổng = 10
-            for (int i = 1; i <= 4; i++) // 1–4
+            for (int i = 1; i <= 4; i++)
             {
                 int j = 10 - i;
-                var t1 = (GameBoardUnitType)(i - 1); // One = 0
+                var t1 = (GameBoardUnitType)(i - 1);
                 var t2 = (GameBoardUnitType)(j - 1);
                 pairs.Add((t1, t2));
             }
@@ -122,98 +120,92 @@ namespace NumMatch
                 switch (type)
                 {
                     case MatchType.HasClearPathBetween:
-                        if (col < cols - 1)
-                            indexB = row * cols + (col + 1);
-                        break;
-
+                        if (col < cols - 1) indexB = row * cols + (col + 1); break;
                     case MatchType.Vertical:
-                        if (row < rows - 1)
-                            indexB = (row + 1) * cols + col;
-                        break;
-
+                        if (row < rows - 1) indexB = (row + 1) * cols + col; break;
                     case MatchType.MainDiagonal:
-                        if (row < rows - 1 && col < cols - 1)
-                            indexB = (row + 1) * cols + (col + 1);
-                        break;
-
+                        if (row < rows - 1 && col < cols - 1) indexB = (row + 1) * cols + (col + 1); break;
                     case MatchType.SecondaryDiagonal:
-                        if (row < rows - 1 && col > 0)
-                            indexB = (row + 1) * cols + (col - 1);
-                        break;
+                        if (row < rows - 1 && col > 0) indexB = (row + 1) * cols + (col - 1); break;
                 }
 
                 if (indexB >= 0 && indexB < listUnitOnBoardLength && !usedIndices.Contains(indexA) && !usedIndices.Contains(indexB))
-                {
                     return (indexA, indexB);
-                }
             }
 
             return null;
         }
 
+        private List<(int, int)> GetAllMatchablePairsOnBoard(List<GameBoardUnitType?> board)
+        {
+            List<(int, int)> validPairs = new();
+            int cols = NUMBER_OF_COLUMNS;
+
+            for (int i = 0; i < board.Count; i++)
+            {
+                if (board[i] == null) continue;
+                int rowA = i / cols;
+                int colA = i % cols;
+                var typeA = board[i].Value;
+
+                for (int j = i + 1; j < board.Count; j++)
+                {
+                    if (board[j] == null) continue;
+                    var typeB = board[j].Value;
+
+                    if (!AreUnitTypeValuesMatchable(typeA, typeB)) continue;
+
+                    int rowB = j / cols;
+                    int colB = j % cols;
+                    var matchType = GetMatchType(board, rowA, colA, rowB, colB);
+                    if (matchType != MatchType.None)
+                        validPairs.Add((i, j));
+                }
+            }
+
+            return validPairs;
+        }
+
         private MatchType GetMatchType(List<GameBoardUnitType?> board, int rowA, int colA, int rowB, int colB)
         {
             int cols = NUMBER_OF_COLUMNS;
-            int rows = Mathf.CeilToInt(board.Count / cols);
-
             int indexA = rowA * cols + colA;
             int indexB = rowB * cols + colB;
-
             if (indexA < 0 || indexB < 0 || indexA >= board.Count || indexB >= board.Count)
                 return MatchType.None;
 
-            // Cùng hàng
             if (rowA == rowB)
             {
-                int start = Math.Min(colA, colB) + 1;
-                int end = Math.Max(colA, colB) - 1;
-                for (int c = start; c <= end; c++)
-                {
-                    int index = rowA * cols + c;
-                    if (board[index] != null) return MatchType.None;
-                }
+                for (int c = Math.Min(colA, colB) + 1; c < Math.Max(colA, colB); c++)
+                    if (board[rowA * cols + c] != null) return MatchType.None;
                 return MatchType.HasClearPathBetween;
             }
 
-            // Cùng cột
             if (colA == colB)
             {
-                int start = Math.Min(rowA, rowB) + 1;
-                int end = Math.Max(rowA, rowB) - 1;
-                for (int r = start; r <= end; r++)
-                {
-                    int index = r * cols + colA;
-                    if (board[index] != null) return MatchType.None;
-                }
+                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
+                    if (board[r * cols + colA] != null) return MatchType.None;
                 return MatchType.Vertical;
             }
 
-            // Main Diagonal
             if ((rowA - colA) == (rowB - colB))
             {
-                int start = Math.Min(rowA, rowB) + 1;
-                int end = Math.Max(rowA, rowB) - 1;
-                for (int r = start; r <= end; r++)
+                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
                 {
                     int c = r - (rowA - colA);
-                    int index = r * cols + c;
-                    if (index >= 0 && index < board.Count && board[index] != null)
-                        return MatchType.None;
+                    int idx = r * cols + c;
+                    if (idx >= 0 && idx < board.Count && board[idx] != null) return MatchType.None;
                 }
                 return MatchType.MainDiagonal;
             }
 
-            // Secondary Diagonal
             if ((rowA + colA) == (rowB + colB))
             {
-                int start = Math.Min(rowA, rowB) + 1;
-                int end = Math.Max(rowA, rowB) - 1;
-                for (int r = start; r <= end; r++)
+                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
                 {
                     int c = (rowA + colA) - r;
-                    int index = r * cols + c;
-                    if (index >= 0 && index < board.Count && board[index] != null)
-                        return MatchType.None;
+                    int idx = r * cols + c;
+                    if (idx >= 0 && idx < board.Count && board[idx] != null) return MatchType.None;
                 }
                 return MatchType.SecondaryDiagonal;
             }
@@ -221,33 +213,29 @@ namespace NumMatch
             return MatchType.None;
         }
 
-        private bool WouldCreateExtraMatch(List<GameBoardUnitType?> board, int toBePlacedUnitIndex, GameBoardUnitType unitType)
+        private bool WouldCreateExtraMatch(List<GameBoardUnitType?> board, int index, GameBoardUnitType newType)
         {
             int cols = NUMBER_OF_COLUMNS;
-            int rows = Mathf.CeilToInt(board.Count / cols);
+            int row = index / cols;
+            int col = index % cols;
 
-            int row = toBePlacedUnitIndex / cols;
-            int col = toBePlacedUnitIndex % cols;
-
-            for (int otherUnitIndex = 0; otherUnitIndex < board.Count; otherUnitIndex++)
+            for (int i = 0; i < board.Count; i++)
             {
-                if (otherUnitIndex == toBePlacedUnitIndex || board[otherUnitIndex] == null)
-                    continue;
+                if (i == index || board[i] == null) continue;
+                var otherType = board[i].Value;
 
-                var otherUnitType = board[otherUnitIndex].Value;
+                if (!AreUnitTypeValuesMatchable(newType, otherType)) continue;
 
-                bool valueMatched = AreUnitTypeValuesMatchable(unitType, otherUnitType);
-                if (!valueMatched) continue;
+                int otherRow = i / cols;
+                int otherCol = i % cols;
 
-                int otherRow = otherUnitIndex / cols;
-                int otherCol = otherUnitIndex % cols;
-                var matchType = GetMatchType(board, row, col, otherRow, otherCol);
-                if (matchType != MatchType.None)
-                    return true; // ❗ Sẽ tạo ra cặp match → reject
+                if (GetMatchType(board, row, col, otherRow, otherCol) != MatchType.None)
+                    return true;
             }
 
             return false;
         }
+
 
         private MatchType GetRandomMatchType()
         {
@@ -263,73 +251,90 @@ namespace NumMatch
         private List<GameBoardUnitType> GenerateValueList(int numMatchPairs, int targetTotal)
         {
             var rng = new System.Random();
-            List<GameBoardUnitType?> valueList = new GameBoardUnitType?[targetTotal].ToList();
-            HashSet<int> usedIndices = new();
+            int retryLimit = RETRY_LIMIT_GENERATE_BOARD;
 
-            // Chọn ngẫu nhiên các cặp hợp lệ
-            var allPairs = GetAllMatchablePairs().OrderBy(x => rng.Next()).ToList();
+            List<(int, int)> lastFailedFinalMatches = null; // 🔧 lưu lại kết quả cuối nếu fail
 
-            int placed = 0;
-            int maxAttempts = 1000;
-
-            while (placed < numMatchPairs && maxAttempts-- > 0)
+            while (retryLimit-- > 0)
             {
-                var pair = allPairs[placed % allPairs.Count]; // để tránh tràn dù thực tế ko thể tràn vì quy định tối đa là 3 match ở stage 1
-                var matchType = GetRandomMatchType();
-                var pairIndices = GetValidMatchIndexPair(matchType, usedIndices, targetTotal);
+                List<GameBoardUnitType?> valueList = new GameBoardUnitType?[targetTotal].ToList();
+                HashSet<int> usedIndices = new();
+                var allPairs = GetAllMatchablePairs().OrderBy(x => rng.Next()).ToList();
 
-                if (pairIndices == null) continue;
+                int placed = 0;
+                int maxAttempts = 1000;
 
-                var indexA = pairIndices.Value.indexA;
-                var indexB = pairIndices.Value.indexB;
-
-                if (WouldCreateExtraMatch(valueList, indexA, pair.Item1)) continue;
-                if (WouldCreateExtraMatch(valueList, indexB, pair.Item2)) continue;
-
-                // ✅ Safe to place
-                valueList[indexA] = pair.Item1;
-                valueList[indexB] = pair.Item2;
-
-                usedIndices.Add(indexA);
-                usedIndices.Add(indexB);
-
-                placed++;
-            }
-
-            // Đếm số lần mỗi type xuất hiện
-            Dictionary<GameBoardUnitType, int> count = new();
-            foreach (GameBoardUnitType t in Enum.GetValues(typeof(GameBoardUnitType)))
-                count[t] = valueList.Count(x => x == t);
-
-            // Fill phần còn lại nhưng KHÔNG tạo thêm pair mới
-            for (int index = 0; index < valueList.Count; index++)
-            {
-                if (valueList[index] != null) continue;
-                //valueList[i] = GameBoardUnitType.One;
-
-                GameBoardUnitType chosen = GameBoardUnitType.One;
-                int min = int.MaxValue;
-
-                foreach (var unitType in Enum.GetValues(typeof(GameBoardUnitType)).Cast<GameBoardUnitType>())
+                while (placed < numMatchPairs && maxAttempts-- > 0)
                 {
-                    if (WouldCreateExtraMatch(valueList, index, unitType))
-                    {
-                        continue; // bỏ nếu tạo match mới
-                    }
+                    var pair = allPairs[placed % allPairs.Count];
+                    var matchType = GetRandomMatchType();
+                    var pairIndices = GetValidMatchIndexPair(matchType, usedIndices, targetTotal);
 
-                    if (count[unitType] < min)
-                    {
-                        min = count[unitType];
-                        chosen = unitType;
-                    }
+                    if (pairIndices == null) continue;
+
+                    int indexA = pairIndices.Value.indexA;
+                    int indexB = pairIndices.Value.indexB;
+
+                    if (WouldCreateExtraMatch(valueList, indexA, pair.Item1)) continue;
+                    if (WouldCreateExtraMatch(valueList, indexB, pair.Item2)) continue;
+
+                    valueList[indexA] = pair.Item1;
+                    valueList[indexB] = pair.Item2;
+
+                    usedIndices.Add(indexA);
+                    usedIndices.Add(indexB);
+                    placed++;
                 }
 
-                valueList[index] = chosen;
-                count[chosen]++;
+                // Phân bố đều phần còn lại
+                Dictionary<GameBoardUnitType, int> count = new();
+                foreach (GameBoardUnitType t in Enum.GetValues(typeof(GameBoardUnitType)))
+                    count[t] = valueList.Count(x => x == t);
+
+                for (int i = 0; i < valueList.Count; i++)
+                {
+                    if (valueList[i] != null) continue;
+
+                    GameBoardUnitType chosen = GameBoardUnitType.One;
+                    int min = int.MaxValue;
+
+                    foreach (var t in Enum.GetValues(typeof(GameBoardUnitType)).Cast<GameBoardUnitType>())
+                    {
+                        if (WouldCreateExtraMatch(valueList, i, t)) continue;
+                        if (count[t] < min)
+                        {
+                            min = count[t];
+                            chosen = t;
+                        }
+                    }
+
+                    valueList[i] = chosen;
+                    count[chosen]++;
+                }
+
+                // ✅ Kiểm tra final match
+                var finalMatches = GetAllMatchablePairsOnBoard(valueList);
+                if (finalMatches.Count <= numMatchPairs)
+                {
+                    return valueList.Select(v => v.Value).ToList();
+                }
+
+                lastFailedFinalMatches = finalMatches; // ❗ lưu lại lần cuối nếu fail
             }
 
-            return valueList.Select(v => v.Value).ToList();
+            if (lastFailedFinalMatches != null)
+            {
+                Debug.LogWarning($"❌ Retry #{RETRY_LIMIT_GENERATE_BOARD}: generated {lastFailedFinalMatches.Count} matches > expected {numMatchPairs}");
+                foreach (var (a, b) in lastFailedFinalMatches)
+                {
+                    Debug.Log($"Pair: #{a} - #{b}");
+                }
+            }
+
+            return null;
         }
+
+
 
         private void GenerateRandomBoard()
         {
