@@ -2,6 +2,7 @@
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
+using static UnityEngine.CullingGroup;
 
 namespace NumMatch
 {
@@ -16,13 +17,14 @@ namespace NumMatch
         Initialized,
         Selected,
         MatchedInProgress,
-        Matched
+        Matched,
+        ClearedFromBoard
     }
 
     public class GameBoardUnit : MonoBehaviour
     {
         private SOGameBoardUnit m_unitSO;
-        public SOGameBoardUnit UnitSO { get { return m_unitSO; } }
+        public SOGameBoardUnit UnitSO { get { return m_unitSO; } set { m_unitSO = value; } }
 
         private GameBoardUnitState m_currentState;
 
@@ -118,6 +120,27 @@ namespace NumMatch
         {
             return CurrentState != GameBoardUnitState.UnInitialized &&
                 CurrentState != GameBoardUnitState.Matched;
+        }
+
+        public bool IsMatched()
+        {
+            return CurrentState == GameBoardUnitState.Matched;
+        }
+
+        public void OnBeClearedFromBoard()
+        {
+            CurrentState = GameBoardUnitState.ClearedFromBoard;
+        }
+
+        public void ResetState()
+        {
+            UnitSO = null;
+            CurrentState = GameBoardUnitState.UnInitialized;
+        }
+
+        public void MoveToIndex(int index)
+        {
+            transform.SetSiblingIndex(index);
         }
     }
 }

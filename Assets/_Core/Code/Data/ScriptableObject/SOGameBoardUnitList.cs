@@ -22,6 +22,7 @@ namespace NumMatch
 
         public SOGameBoardUnit GetRandom()
         {
+            //return unitList[0];
             return unitList[Random.Range(0, unitList.Count)];
         }
     }

@@ -26,7 +26,7 @@ namespace NumMatch
 
         private void Logic_OnCurrentStateChanged(object sender, GameBoardUnit.OnCurrentStateChangedEventArgs e)
         {
-            var newState = e.newState; 
+            var newState = e.newState;
             //print("state logic changed: " + newState);
             switch (newState)
             {
@@ -50,6 +50,10 @@ namespace NumMatch
                     ToggleIcon(true);
                     icon.GetComponent<Image>().color = Color.gray;
                     SetSelected(false);
+                    break;
+                case GameBoardUnitState.ClearedFromBoard:
+                    SetSelected(true);
+
                     break;
             }
         }
