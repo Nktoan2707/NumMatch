@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
 namespace NumMatch
@@ -19,31 +17,29 @@ namespace NumMatch
         }
 
         // Start is called before the first frame update
-        void Start()
+        private void Start()
         {
-            initBoard.onClick.AddListener(() => {
+            initBoard.onClick.AddListener(() =>
+            {
                 GameBoard.Instance.CleanUp();
-                
+
                 StartCoroutine(GameBoard.Instance.InitializeBoardRoutine());
-
             });
 
-            decreaseStage.onClick.AddListener(() => {
+            decreaseStage.onClick.AddListener(() =>
+            {
                 GameBoard.Instance.CurrentStageNumber--;
-
             });
 
-            increaseStage.onClick.AddListener(() => {
+            increaseStage.onClick.AddListener(() =>
+            {
                 GameBoard.Instance.CurrentStageNumber++;
-
             });
-
         }
 
         // Update is called once per frame
-        void Update()
+        private void Update()
         {
-        
         }
     }
 }

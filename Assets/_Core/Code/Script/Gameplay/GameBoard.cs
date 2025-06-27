@@ -25,6 +25,7 @@ namespace NumMatch
         public const int RETRY_LIMIT_GENERATE_BOARD = 50;
         public const int PADDING_ROWS = 3;
         public const int INITIAL_ADD_NUMBER_ATTEMPTS = 6;
+
         public event EventHandler OnAddNumberAttemptsLeftChanged;
 
         public event EventHandler OnCurrentScoreChanged;
@@ -87,7 +88,7 @@ namespace NumMatch
             // Tạo danh sách các UnitSO copy từ allOccupiedUnitList (các units còn trên board)
             var newUnitSOs = allOccupiedUnitList
                 .Where(u => !u.IsMatched())
-                .Select(u =>u.UnitSO)
+                .Select(u => u.UnitSO)
                 .ToList();
 
             // Tính toán số row ước tính sau khi add thêm số hiện tại
@@ -128,6 +129,53 @@ namespace NumMatch
             }
 
             AddNumberAttemptsLeft--;
+
+            Debug.Log("📦 AllUnitList (Full Grid View with States):");
+            PrintUnitGridWithState(allUnitList);
+
+            Debug.Log("📊 AllOccupiedUnitList (Logical View with States):");
+            PrintUnitGridWithState(allOccupiedUnitList);
+        }
+
+        private string Shorten(string state)
+        {
+            return state switch
+            {
+                "UnInitialized" => "UnInit",
+                "Initialized" => "Init",
+                "Chosen" => "Chosen",
+                "ClearAnimationInProgress" => "Clear",
+                _ => state
+            };
+        }
+
+        private void PrintUnitGridWithState(List<GameBoardUnit> unitList)
+        {
+            int cols = NUMBER_OF_COLUMNS;
+            int totalRows = Mathf.CeilToInt((float)unitList.Count / cols);
+            string log = "";
+
+            for (int row = 0; row < totalRows; row++)
+            {
+                for (int col = 0; col < cols; col++)
+                {
+                    int index = row * cols + col;
+                    if (index >= unitList.Count)
+                    {
+                        log += "          ";
+                    }
+                    else
+                    {
+                        var unit = unitList[index];
+                        string typeStr = unit.UnitSO != null ? unit.UnitSO.type.ToString() : "Empty";
+                        string stateStr = unit.CurrentState.ToString();
+                        log += $"{typeStr}({Shorten(stateStr)})".PadRight(12);
+                    }
+                }
+                log += "\n";
+            }
+
+            Debug.Log(log);
         }
 
         public void AssertStageMatchCount(int stageNumber)
@@ -359,12 +407,10 @@ namespace NumMatch
 
             int numberOfRows = Mathf.CeilToInt(viewportHeight / fullRowHeight);
 
-            Debug.Log($"Unit height = {unitHeight}, spacing = {spacing}, viewport = {viewportHeight}, fullRowHeight = {fullRowHeight}");
-
+            //Debug.Log($"Unit height = {unitHeight}, spacing = {spacing}, viewport = {viewportHeight}, fullRowHeight = {fullRowHeight}");
 
             return (numberOfRows) * NUMBER_OF_COLUMNS;
         }
-
 
         private void CheckAndClearMatchedRows()
         {
@@ -419,7 +465,7 @@ namespace NumMatch
             yield return new WaitForSeconds(0.5f); // animation delay
             CurrentScore += rowsToClear.Count;
 
-            ShiftRowsBelowUp_MultipleRows(rowsToClear);
+            ShiftRowsBelowUp(rowsToClear);
         }
 
         private void ClearSelectedUnitList()
@@ -791,14 +837,14 @@ namespace NumMatch
             CheckAndClearMatchedRows();
         }
 
-        private void ShiftRowsBelowUp_MultipleRows(List<int> rowsToClear)
+        private void ShiftRowsBelowUp(List<int> rowsToClear)
         {
-            int totalRows = allOccupiedUnitList.Count / NUMBER_OF_COLUMNS;
+            int totalRows = Mathf.CeilToInt((float)allOccupiedUnitList.Count / NUMBER_OF_COLUMNS);
+            Debug.Log($"📦 Before shift: Occupied count = {allOccupiedUnitList.Count}");
 
-            // Sort row indices từ thấp nhất → cao nhất
             rowsToClear.Sort();
-            //basically, we will shift the min index cleared row to the bottom (which will also shift other cleared rows above it by 1 unit)
-            // then repeat for n times with n is the length of cleared rows
+            Debug.Log("📌 Rows to clear (sorted): " + string.Join(",", rowsToClear));
+
             for (int i = 0; i < rowsToClear.Count; i++)
             {
                 int clearedRow = rowsToClear[i];
@@ -810,41 +856,76 @@ namespace NumMatch
                         int currentIndex = row * NUMBER_OF_COLUMNS + col;
                         int belowIndex = (row + 1) * NUMBER_OF_COLUMNS + col;
 
-                        var unitAbove = allOccupiedUnitList[currentIndex];
-                        var unitBelow = allOccupiedUnitList[belowIndex];
+                        if (currentIndex >= allUnitList.Count || belowIndex >= allUnitList.Count)
+                        {
+                            Debug.LogWarning($"⛔ Out of bounds: currentIndex={currentIndex}, belowIndex={belowIndex}");
+                            continue;
+                        }
 
-                        allOccupiedUnitList[currentIndex] = unitBelow;
+                        var unitAbove = allUnitList[currentIndex];
+                        var unitBelow = allUnitList[belowIndex];
+
+                        allUnitList[currentIndex] = unitBelow;
+                        allUnitList[belowIndex] = unitAbove;
+
+                        if (belowIndex < allOccupiedUnitList.Count)
+                        {
+                            allOccupiedUnitList[currentIndex] = unitBelow;
+                            allOccupiedUnitList[belowIndex] = unitAbove;
+                        }
+                        else
+                        {
+                            allOccupiedUnitList[currentIndex] = null;
+                            allOccupiedUnitList.Add(unitAbove);
+                        }
+
                         unitBelow.MoveToIndex(currentIndex);
-
-                        allOccupiedUnitList[belowIndex] = unitAbove;
                         unitAbove.MoveToIndex(belowIndex);
+
+                        Debug.Log($"↕ Shift: ({row},{col}) ⇅ ({row + 1},{col}) → swap {unitAbove.name} <-> {unitBelow.name}");
                     }
                 }
 
-                // Cập nhật lại chỉ số cho các row phía trên vì chúng đã bị shift lên 1 đơn vị
+                // Cập nhật lại các row sau mỗi shift
                 for (int j = 0; j < rowsToClear.Count; j++)
                 {
                     if (rowsToClear[j] > clearedRow)
-                    {
                         rowsToClear[j]--;
-                    }
                 }
             }
 
-            // Thêm số row rỗng tương ứng ở cuối
+            Debug.Log($"📦 After shift: Occupied count = {allOccupiedUnitList.Count}");
+
+            // Clear row phía cuối
             for (int i = 0; i < rowsToClear.Count; i++)
             {
                 int rowIndex = totalRows - 1 - i;
                 int rowStartIndex = rowIndex * NUMBER_OF_COLUMNS;
+
+                Debug.Log($"🧹 Clearing bottom row {rowIndex}");
+
                 for (int col = 0; col < NUMBER_OF_COLUMNS; col++)
                 {
                     int index = rowStartIndex + col;
-                    var unit = allOccupiedUnitList[index];
+                    if (index >= allUnitList.Count) continue;
 
+                    var unit = allUnitList[index];
                     unit.ResetState();
-                    //unit.MoveToIndex(index);
+
+                    int foundIndex = allOccupiedUnitList.IndexOf(unit);
+                    if (foundIndex != -1)
+                    {
+                        allOccupiedUnitList[foundIndex] = null;
+                        Debug.Log($"🔻 Removed unit at index {foundIndex} in occupied list: {unit.name}");
+                    }
                 }
             }
+
+            Debug.Log($"🧮 After null-ing: {allOccupiedUnitList.Count}");
+
+            allOccupiedUnitList = allOccupiedUnitList.Where(u => u != null).ToList();
+
+            Debug.Log($"✅ Final occupied count after cleanup: {allOccupiedUnitList.Count}");
         }
 
         // số dòng thêm để scroll

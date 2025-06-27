@@ -1,6 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -27,31 +24,43 @@ namespace NumMatch
         private void Logic_OnCurrentStateChanged(object sender, GameBoardUnit.OnCurrentStateChangedEventArgs e)
         {
             var newState = e.newState;
-            //print("state logic changed: " + newState);
             switch (newState)
             {
                 case GameBoardUnitState.UnInitialized:
                     ToggleIcon(false);
+                    ToggleIconMatchedColor(false);
+
                     SetSelected(false);
                     break;
+
                 case GameBoardUnitState.Initialized:
                     SetIcon(logic.UnitSO.icon);
                     ToggleIcon(true);
+                    ToggleIconMatchedColor(false);
+
                     SetSelected(false);
                     break;
+
                 case GameBoardUnitState.Selected:
                     ToggleIcon(true);
+                    ToggleIconMatchedColor(false);
                     SetSelected(true);
                     break;
+
                 case GameBoardUnitState.MatchedInProgress:
+                    ToggleIconMatchedColor(false);
                     SetSelected(false);
                     break;
+
                 case GameBoardUnitState.Matched:
                     ToggleIcon(true);
-                    icon.GetComponent<Image>().color = Color.gray;
+                    ToggleIconMatchedColor(true);
                     SetSelected(false);
                     break;
+
                 case GameBoardUnitState.ClearedFromBoard:
+                    ToggleIcon(false);
+                    ToggleIconMatchedColor(false);
                     SetSelected(true);
 
                     break;
@@ -60,7 +69,6 @@ namespace NumMatch
 
         private void SetIcon(Sprite newIcon)
         {
-            //print(icon.GetComponent<Image>().sprite + " ---- " + newIcon);
             icon.GetComponent<Image>().sprite = newIcon;
         }
 
@@ -69,11 +77,14 @@ namespace NumMatch
             icon.SetActive(doesShowIcon);
         }
 
+        private void ToggleIconMatchedColor(bool isMatched)
+        {
+            icon.GetComponent<Image>().color = isMatched ? Color.gray : Color.black;
+        }
+
         private void SetSelected(bool isSelected)
         {
             selected.SetActive(isSelected);
         }
-
-
     }
 }

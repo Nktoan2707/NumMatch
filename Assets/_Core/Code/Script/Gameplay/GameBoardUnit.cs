@@ -1,8 +1,6 @@
 ﻿using System;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
-using static UnityEngine.CullingGroup;
 
 namespace NumMatch
 {
@@ -24,7 +22,8 @@ namespace NumMatch
     public class GameBoardUnit : MonoBehaviour
     {
         private SOGameBoardUnit m_unitSO;
-        public SOGameBoardUnit UnitSO { get { return m_unitSO; } set { m_unitSO = value; } }
+        public SOGameBoardUnit UnitSO
+        { get { return m_unitSO; } set { m_unitSO = value; } }
 
         private GameBoardUnitState m_currentState;
 
@@ -36,7 +35,8 @@ namespace NumMatch
             }
             set
             {
-                if (value == m_currentState) {
+                if (value == m_currentState)
+                {
                     return;
                 }
                 var oldState = m_currentState;
@@ -45,26 +45,41 @@ namespace NumMatch
                 switch (m_currentState)
                 {
                     case GameBoardUnitState.UnInitialized:
+                        button.onClick.RemoveAllListeners();
                         button.enabled = false;
                         break;
+
                     case GameBoardUnitState.Initialized:
                         button.enabled = true;
 
                         break;
+
                     case GameBoardUnitState.Selected:
                         button.enabled = true;
 
                         break;
+
                     case GameBoardUnitState.MatchedInProgress:
                         button.enabled = false;
 
                         break;
+
                     case GameBoardUnitState.Matched:
                         button.enabled = false;
 
                         break;
+
+                    case GameBoardUnitState.ClearedFromBoard:
+                        button.enabled = false;
+
+                        //CurrentState = GameBoardUnitState.UnInitialized;
+                        //button.enabled = true;
+
+                        break;
+
+                    default:
+                        break;
                 }
-                //print("Changed state: " + oldState + "--->" + value);
                 OnCurrentStateChanged?.Invoke(this, new OnCurrentStateChangedEventArgs
                 {
                     oldState = oldState,
@@ -103,12 +118,13 @@ namespace NumMatch
 
         public void ToggleSelected(bool isSelected)
         {
-            if (isSelected) {
+            if (isSelected)
+            {
                 CurrentState = GameBoardUnitState.Selected;
-            } else
+            }
+            else
             {
                 CurrentState = GameBoardUnitState.Initialized;
-
             }
         }
 
