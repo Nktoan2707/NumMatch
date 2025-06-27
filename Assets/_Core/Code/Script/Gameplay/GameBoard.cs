@@ -18,45 +18,170 @@ namespace NumMatch
 
     public class GameBoard : MonoBehaviour
     {
-        public const int NUMBER_OF_COLUMNS = 9;
+        public const int INITIAL_BOARD_LENGTH = NUMBER_OF_COLUMNS * 3;
+        public const int INITIAL_STAGE_NUMBER = 1;
         public const int MATCH_TOTAL_VALUE = 10;
-        public const int INITIAL_BOARD_LENGTH = NUMBER_OF_COLUMNS * 5;
-        public const int MINIMAL_BOARD_GRID_LENGTH = NUMBER_OF_COLUMNS * 15;
+        public const int NUMBER_OF_COLUMNS = 9;
         public const int RETRY_LIMIT_GENERATE_BOARD = 50;
+        public const int PADDING_ROWS = 3;
+        public const int INITIAL_ADD_NUMBER_ATTEMPTS = 6;
+        public event EventHandler OnAddNumberAttemptsLeftChanged;
 
+        public event EventHandler OnCurrentScoreChanged;
 
+        public event EventHandler OnCurrentStageNumberChanged;
+
+        private List<GameBoardUnit> allOccupiedUnitList;
+        private List<GameBoardUnit> allUnitList;
+        [SerializeField] private SOGameBoardUnitList allUnitSOList;
+        private Dictionary<GameBoardUnitType, SOGameBoardUnit> dict_GameBoardUnitType_SOGameBoardUnit;
+        private int m_addNumberAttemptsLeft;
+        private int m_currentScore;
+        private int m_currentStageNumber;
+        [SerializeField] private ScrollRect scrollRect;
+        [SerializeField] private Transform scrollViewContent;
+        [SerializeField] private RectTransform scrollViewport;
+        private List<GameBoardUnit> selectedUnitList;
+        [SerializeField] private GameObject unitPrefab;
         public static GameBoard Instance { get; private set; }
 
-        [SerializeField] private Transform contentTransform;
-        [SerializeField] private GameObject unitPrefab;
-        [SerializeField] private SOGameBoardUnitList allUnitSOList;
-
-        private List<GameBoardUnit> selectedUnitList;
-        private List<GameBoardUnit> allUnitList;
-        private List<GameBoardUnit> allOccupiedUnitList;
-
-        private Dictionary<GameBoardUnitType, SOGameBoardUnit> dict_GameBoardUnitType_SOGameBoardUnit;
-        public int m_currentStageNumber;
-        public int CurrentStageNumber
-        { get { return m_currentStageNumber; } set { m_currentStageNumber = Mathf.Clamp(value, 1, 3); } }
-
-        private void Awake()
+        public int AddNumberAttemptsLeft
         {
-            if (Instance != null)
+            get { return m_addNumberAttemptsLeft; }
+            set
             {
-                Destroy(Instance);
+                m_addNumberAttemptsLeft = Math.Max(0, value);
+                OnAddNumberAttemptsLeftChanged?.Invoke(this, EventArgs.Empty);
             }
-            Instance = this;
-            dict_GameBoardUnitType_SOGameBoardUnit = allUnitSOList.ToDict();
-            selectedUnitList = new List<GameBoardUnit>();
-            allUnitList = new List<GameBoardUnit>();
-            allOccupiedUnitList = new List<GameBoardUnit>();
-            CurrentStageNumber = 2;
         }
 
-        private void Start()
+        public int CurrentScore
         {
-            StartCoroutine(InitializeBoardRoutine());
+            get { return m_currentScore; }
+            set
+            {
+                m_currentScore = value;
+                OnCurrentScoreChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        public int CurrentStageNumber
+        {
+            get { return m_currentStageNumber; }
+            set
+            {
+                m_currentStageNumber = Math.Max(INITIAL_STAGE_NUMBER, value);
+                OnCurrentStageNumberChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        public void OnPlayerClickedAddMoreNumber()
+        {
+            if (AddNumberAttemptsLeft <= 0)
+                return;
+            StartCoroutine(AddMoreNumbersToBoard());
+        }
+
+        public IEnumerator AddMoreNumbersToBoard()
+        {
+            // Tạo danh sách các UnitSO copy từ allOccupiedUnitList (các units còn trên board)
+            var newUnitSOs = allOccupiedUnitList
+                .Where(u => !u.IsMatched())
+                .Select(u =>u.UnitSO)
+                .ToList();
+
+            // Tính toán số row ước tính sau khi add thêm số hiện tại
+            int rowsOccupied = Mathf.CeilToInt((float)(allOccupiedUnitList.Count) / NUMBER_OF_COLUMNS);
+            rowsOccupied += Mathf.CeilToInt((float)(newUnitSOs.Count) / NUMBER_OF_COLUMNS);
+            int minimalRows = Mathf.CeilToInt((float)CalculateMinimalBoardGridLength() / NUMBER_OF_COLUMNS);
+
+            // Bổ sung hàng rỗng nếu cần để giữ form
+            while (rowsOccupied + PADDING_ROWS > Mathf.CeilToInt((float)allUnitList.Count / NUMBER_OF_COLUMNS))
+            {
+                for (int i = 0; i < NUMBER_OF_COLUMNS; i++)
+                {
+                    var unit = SpawnUnit();
+                    allUnitList.Add(unit);
+                }
+            }
+
+            // Toggle scroll
+            bool needsScroll = rowsOccupied + PADDING_ROWS >= minimalRows;
+            ToggleScrollDirection(needsScroll);
+
+            //chờ các empty unit instantiate xong xuôi
+            yield return null;
+
+            // tìm đuôi của board để bắt đầu add number
+            for (int i = 0, j = 0; i < allUnitList.Count && j < newUnitSOs.Count; i++)
+            {
+                var unit = allUnitList[i];
+                if (!unit.IsUnitialized())
+                {
+                    continue;
+                }
+
+                unit.Initialize(this, newUnitSOs[j]);
+                allOccupiedUnitList.Add(unit);
+                j++;
+            }
+
+            AddNumberAttemptsLeft--;
+        }
+
+        public void AssertStageMatchCount(int stageNumber)
+        {
+            int expectedMatches = stageNumber switch
+            {
+                1 => 3,
+                2 => 2,
+                _ => 1
+            };
+
+            int cols = NUMBER_OF_COLUMNS;
+            int rows = allOccupiedUnitList.Count / cols;
+            HashSet<int> matchedIndices = new();
+
+            int totalMatch = 0;
+
+            for (int i = 0; i < allOccupiedUnitList.Count; i++)
+            {
+                if (matchedIndices.Contains(i)) continue;
+                var unitA = allOccupiedUnitList[i];
+                if (!unitA.IsOccupied()) continue;
+
+                int rowA = i / cols;
+                int colA = i % cols;
+
+                for (int j = i + 1; j < allOccupiedUnitList.Count; j++)
+                {
+                    if (matchedIndices.Contains(j)) continue;
+                    var unitB = allOccupiedUnitList[j];
+                    if (!unitB.IsOccupied()) continue;
+
+                    int rowB = j / cols;
+                    int colB = j % cols;
+
+                    if (!AreUnitTypeValuesMatchable(unitA.UnitSO.type, unitB.UnitSO.type)) continue;
+
+                    MatchType matchType = GetMatchType(allOccupiedUnitList, rowA, colA, rowB, colB);
+                    if (matchType == MatchType.None) continue;
+
+                    matchedIndices.Add(i);
+                    matchedIndices.Add(j);
+                    totalMatch++;
+                    break;
+                }
+            }
+
+            if (totalMatch == expectedMatches)
+            {
+                Debug.Log($"✅ Stage {stageNumber} PASSED: Exactly {totalMatch} matchable pairs found.");
+            }
+            else
+            {
+                Debug.LogWarning($"❌ Stage {stageNumber} FAILED: Found {totalMatch} matchable pairs, expected {expectedMatches}.");
+            }
         }
 
         public void CleanUp()
@@ -74,178 +199,259 @@ namespace NumMatch
             SpawnEmptyGrid();
             yield return new WaitForEndOfFrame();
             GenerateRandomBoard();
+
+            ToggleScrollDirection(false);
         }
 
-        private void SpawnEmptyGrid()
+        public void OnAUnitClicked(GameBoardUnit chosenUnit)
         {
-            for (int i = 0; i < MINIMAL_BOARD_GRID_LENGTH; i++)
+            if (selectedUnitList.Count >= 2)
             {
-                var unit = SpawnUnit();
-                allUnitList.Add(unit);
-            }
-        }
-        private List<(GameBoardUnitType, GameBoardUnitType)> GetAllMatchablePairs()
-        {
-            var pairs = new List<(GameBoardUnitType, GameBoardUnitType)>();
-
-            // Match cùng loại
-            foreach (GameBoardUnitType t in Enum.GetValues(typeof(GameBoardUnitType)))
-                pairs.Add((t, t));
-
-            // Match theo tổng = 10
-            for (int i = 1; i <= 4; i++)
-            {
-                int j = 10 - i;
-                var t1 = (GameBoardUnitType)(i - 1);
-                var t2 = (GameBoardUnitType)(j - 1);
-                pairs.Add((t1, t2));
+                ClearSelectedUnitList();
+                return;
             }
 
-            return pairs;
+            if (selectedUnitList.Contains(chosenUnit))
+            {
+                //if click on the same tile
+                ClearSelectedUnitList();
+                return;
+            }
+
+            if (selectedUnitList.Count < 2)
+            {
+                selectedUnitList.Add(chosenUnit);
+                chosenUnit.ToggleSelected(true);
+            }
+
+            if (selectedUnitList.Count < 2)
+            {
+                return;
+            }
+
+            if (GetMatchTypeFromSelectedUnits() == MatchType.None)
+            {
+                ClearSelectedUnitList();
+                return;
+            }
+            else
+            {
+                HandleValidMatch();
+            }
         }
 
-        private (int indexA, int indexB)? GetValidMatchIndexPair(MatchType type, HashSet<int> usedIndices, int listUnitOnBoardLength)
+        public void PrintAllValidMatchesOnBoardWithSummary()
         {
             int cols = NUMBER_OF_COLUMNS;
-            int rows = listUnitOnBoardLength / cols;
-            var rng = new System.Random();
+            int rows = allOccupiedUnitList.Count / cols;
+            HashSet<int> matchedIndices = new(); // ✅ ngăn trùng unit
+            HashSet<(int, int)> printed = new();
 
-            for (int attempt = 0; attempt < 100; attempt++)
+            int totalMatch = 0;
+            Dictionary<MatchType, int> matchCountByType = new();
+
+            foreach (MatchType type in Enum.GetValues(typeof(MatchType)))
             {
-                int row = rng.Next(rows);
-                int col = rng.Next(cols);
-                int indexA = row * cols + col;
-                int indexB = -1;
-
-                switch (type)
-                {
-                    case MatchType.HasClearPathBetween:
-                        if (col < cols - 1) indexB = row * cols + (col + 1); break;
-                    case MatchType.Vertical:
-                        if (row < rows - 1) indexB = (row + 1) * cols + col; break;
-                    case MatchType.MainDiagonal:
-                        if (row < rows - 1 && col < cols - 1) indexB = (row + 1) * cols + (col + 1); break;
-                    case MatchType.SecondaryDiagonal:
-                        if (row < rows - 1 && col > 0) indexB = (row + 1) * cols + (col - 1); break;
-                }
-
-                if (indexB >= 0 && indexB < listUnitOnBoardLength && !usedIndices.Contains(indexA) && !usedIndices.Contains(indexB))
-                    return (indexA, indexB);
+                if (type != MatchType.None)
+                    matchCountByType[type] = 0;
             }
 
-            return null;
-        }
-
-        private List<(int, int)> GetAllMatchablePairsOnBoard(List<GameBoardUnitType?> board)
-        {
-            List<(int, int)> validPairs = new();
-            int cols = NUMBER_OF_COLUMNS;
-
-            for (int i = 0; i < board.Count; i++)
+            for (int i = 0; i < allOccupiedUnitList.Count; i++)
             {
-                if (board[i] == null) continue;
+                if (matchedIndices.Contains(i)) continue; // ⛔ đã tham gia match
+                var unitA = allOccupiedUnitList[i];
+                if (!unitA.IsOccupied()) continue;
+
                 int rowA = i / cols;
                 int colA = i % cols;
-                var typeA = board[i].Value;
 
-                for (int j = i + 1; j < board.Count; j++)
+                for (int j = i + 1; j < allOccupiedUnitList.Count; j++)
                 {
-                    if (board[j] == null) continue;
-                    var typeB = board[j].Value;
-
-                    if (!AreUnitTypeValuesMatchable(typeA, typeB)) continue;
+                    if (matchedIndices.Contains(j)) continue; // ⛔ đã match
+                    var unitB = allOccupiedUnitList[j];
+                    if (!unitB.IsOccupied()) continue;
 
                     int rowB = j / cols;
                     int colB = j % cols;
-                    var matchType = GetMatchType(board, rowA, colA, rowB, colB);
-                    if (matchType != MatchType.None)
-                        validPairs.Add((i, j));
+
+                    if (!AreUnitTypeValuesMatchable(unitA.UnitSO.type, unitB.UnitSO.type)) continue;
+
+                    MatchType matchType = GetMatchType(allOccupiedUnitList, rowA, colA, rowB, colB);
+                    if (matchType == MatchType.None) continue;
+
+                    var key = (i, j);
+                    if (!printed.Contains(key))
+                    {
+                        printed.Add(key);
+                        matchedIndices.Add(i); // ✅ Đánh dấu đã match
+                        matchedIndices.Add(j);
+                        totalMatch++;
+                        matchCountByType[matchType]++;
+                        string log = $"✅ {unitA.UnitSO.type} matched with {unitB.UnitSO.type} at ({rowA},{colA}) ↔ ({rowB},{colB}) [{matchType}]";
+                        Debug.Log(log);
+                        break; // ⛔ Dừng loop sau khi match thành công
+                    }
                 }
             }
 
-            return validPairs;
+            Debug.Log("📊 === MATCH SUMMARY ===");
+            Debug.Log($"🔢 Total Valid Matchable Pairs: {totalMatch}");
+            foreach (var kvp in matchCountByType)
+            {
+                Debug.Log($"• {kvp.Key}: {kvp.Value}");
+            }
+            Debug.Log("========================");
         }
 
-        private MatchType GetMatchType(List<GameBoardUnitType?> board, int rowA, int colA, int rowB, int colB)
+        public GameBoardUnit SpawnUnit()
         {
-            int cols = NUMBER_OF_COLUMNS;
-            int indexA = rowA * cols + colA;
-            int indexB = rowB * cols + colB;
-            if (indexA < 0 || indexB < 0 || indexA >= board.Count || indexB >= board.Count)
-                return MatchType.None;
+            var unit = Instantiate(unitPrefab, scrollViewContent);
+            return unit.GetComponent<GameBoardUnit>();
+        }
 
-            if (rowA == rowB)
+        public void ToggleScrollDirection(bool doesEnableScroll)
+        {
+            scrollRect.vertical = doesEnableScroll;
+        }
+
+        private bool AreUnitTypeValuesMatchable(GameBoardUnitType a, GameBoardUnitType b)
+        {
+            if (a == b) return true;
+            int va = dict_GameBoardUnitType_SOGameBoardUnit[a].value;
+            int vb = dict_GameBoardUnitType_SOGameBoardUnit[b].value;
+            return (va + vb) == MATCH_TOTAL_VALUE;
+        }
+
+        private void Awake()
+        {
+            if (Instance != null)
             {
-                for (int c = Math.Min(colA, colB) + 1; c < Math.Max(colA, colB); c++)
-                    if (board[rowA * cols + c] != null) return MatchType.None;
-                return MatchType.HasClearPathBetween;
+                Destroy(Instance);
             }
+            Instance = this;
+            dict_GameBoardUnitType_SOGameBoardUnit = allUnitSOList.ToDict();
+            selectedUnitList = new List<GameBoardUnit>();
+            allUnitList = new List<GameBoardUnit>();
+            allOccupiedUnitList = new List<GameBoardUnit>();
+            CurrentStageNumber = INITIAL_STAGE_NUMBER;
+            CurrentScore = 0;
+            AddNumberAttemptsLeft = INITIAL_ADD_NUMBER_ATTEMPTS;
 
-            if (colA == colB)
-            {
-                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
-                    if (board[r * cols + colA] != null) return MatchType.None;
-                return MatchType.Vertical;
-            }
+            scrollRect.horizontal = false;
+            ToggleScrollDirection(false);
+        }
 
-            if ((rowA - colA) == (rowB - colB))
+        private int CalculateMinimalBoardGridLength()
+        {
+            GameObject temp = Instantiate(unitPrefab, scrollViewContent);
+            var rect = temp.GetComponent<RectTransform>().rect;
+            float unitHeight = rect.height;
+
+            Destroy(temp);
+
+            // Get spacing từ layout group
+            var layoutGroup = scrollViewContent.GetComponent<VerticalLayoutGroup>();
+            float spacing = layoutGroup != null ? layoutGroup.spacing : 0f;
+
+            float fullRowHeight = unitHeight + spacing;
+            float viewportHeight = scrollViewport.rect.height;
+
+            int numberOfRows = Mathf.CeilToInt(viewportHeight / fullRowHeight);
+
+            return (numberOfRows + PADDING_ROWS) * NUMBER_OF_COLUMNS;
+        }
+
+
+        private void CheckAndClearMatchedRows()
+        {
+            int totalRows = Mathf.CeilToInt(allOccupiedUnitList.Count / NUMBER_OF_COLUMNS);
+            List<int> listRowIndexToBeCleared = new List<int>();
+
+            for (int row = 0; row < totalRows; row++)
             {
-                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
+                if (!allOccupiedUnitList[row * NUMBER_OF_COLUMNS].IsMatched())
                 {
-                    int c = r - (rowA - colA);
-                    int idx = r * cols + c;
-                    if (idx >= 0 && idx < board.Count && board[idx] != null) return MatchType.None;
+                    // if the first tile is not a matched one, then no need to go further, this also apply for rows used for padding (UnInitialized)
+                    continue;
                 }
-                return MatchType.MainDiagonal;
-            }
 
-            if ((rowA + colA) == (rowB + colB))
-            {
-                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
+                bool isAllUnitsInRowMatched = true;
+
+                for (int col = 1; col < NUMBER_OF_COLUMNS; col++)
                 {
-                    int c = (rowA + colA) - r;
-                    int idx = r * cols + c;
-                    if (idx >= 0 && idx < board.Count && board[idx] != null) return MatchType.None;
+                    int index = row * NUMBER_OF_COLUMNS + col;
+                    if (allOccupiedUnitList[index].IsOccupied())
+                    {
+                        isAllUnitsInRowMatched = false;
+                        break;
+                    }
                 }
-                return MatchType.SecondaryDiagonal;
+
+                if (isAllUnitsInRowMatched)
+                {
+                    Debug.Log($"Row {row} is empty → add to clear list");
+                    listRowIndexToBeCleared.Add(row);
+                }
             }
 
-            return MatchType.None;
-        }
-
-        private bool WouldCreateExtraMatch(List<GameBoardUnitType?> board, int index, GameBoardUnitType newType)
-        {
-            int cols = NUMBER_OF_COLUMNS;
-            int row = index / cols;
-            int col = index % cols;
-
-            for (int i = 0; i < board.Count; i++)
+            if (listRowIndexToBeCleared.Count > 0)
             {
-                if (i == index || board[i] == null) continue;
-                var otherType = board[i].Value;
-
-                if (!AreUnitTypeValuesMatchable(newType, otherType)) continue;
-
-                int otherRow = i / cols;
-                int otherCol = i % cols;
-
-                if (GetMatchType(board, row, col, otherRow, otherCol) != MatchType.None)
-                    return true;
+                StartCoroutine(ClearMultipleRows(listRowIndexToBeCleared));
             }
-
-            return false;
         }
 
-
-        private MatchType GetRandomMatchType()
+        private IEnumerator ClearMultipleRows(List<int> rowsToClear)
         {
-            var values = new[] {
-                MatchType.HasClearPathBetween,
-                MatchType.Vertical,
-                MatchType.MainDiagonal,
-                MatchType.SecondaryDiagonal
+            foreach (var row in rowsToClear)
+            {
+                for (int col = 0; col < NUMBER_OF_COLUMNS; col++)
+                {
+                    int index = row * NUMBER_OF_COLUMNS + col;
+                    var unit = allOccupiedUnitList[index];
+                    unit.OnBeClearedFromBoard();
+                }
+            }
+
+            yield return new WaitForSeconds(0.5f); // animation delay
+            CurrentScore += rowsToClear.Count;
+
+            ShiftRowsBelowUp_MultipleRows(rowsToClear);
+        }
+
+        private void ClearSelectedUnitList()
+        {
+            foreach (var unit in selectedUnitList)
+            {
+                unit.ToggleSelected(false);
+            }
+            selectedUnitList.Clear();
+        }
+
+        private void GenerateRandomBoard()
+        {
+            if (CurrentStageNumber < 1)
+            {
+                Debug.LogError("stage number can not be less than 1!");
+            }
+
+            int numberOfInitialMatches = CurrentStageNumber switch
+            {
+                1 => 3,
+                2 => 2,
+                _ => 1,
             };
-            return values[UnityEngine.Random.Range(0, values.Length)];
+
+            var generatedValues = GenerateValueList(numberOfInitialMatches, INITIAL_BOARD_LENGTH);
+
+            for (int i = 0; i < generatedValues.Count; i++)
+            {
+                var unitSO = dict_GameBoardUnitType_SOGameBoardUnit[generatedValues[i]];
+                allUnitList[i].Initialize(this, unitSO);
+                allOccupiedUnitList.Add(allUnitList[i]);
+            }
+
+            PrintAllValidMatchesOnBoardWithSummary();
+            AssertStageMatchCount(CurrentStageNumber);
         }
 
         private List<GameBoardUnitType> GenerateValueList(int numMatchPairs, int targetTotal)
@@ -334,151 +540,101 @@ namespace NumMatch
             return null;
         }
 
-
-
-        private void GenerateRandomBoard()
+        private List<(GameBoardUnitType, GameBoardUnitType)> GetAllMatchablePairs()
         {
-            if (CurrentStageNumber < 1)
+            var pairs = new List<(GameBoardUnitType, GameBoardUnitType)>();
+
+            // Match cùng loại
+            foreach (GameBoardUnitType t in Enum.GetValues(typeof(GameBoardUnitType)))
+                pairs.Add((t, t));
+
+            // Match theo tổng = 10
+            for (int i = 1; i <= 4; i++)
             {
-                Debug.LogError("stage number can not be less than 1!");
+                int j = 10 - i;
+                var t1 = (GameBoardUnitType)(i - 1);
+                var t2 = (GameBoardUnitType)(j - 1);
+                pairs.Add((t1, t2));
             }
 
-            int numberOfInitialMatches = CurrentStageNumber switch
-            {
-                1 => 3,
-                2 => 2,
-                _ => 1,
-            };
-
-            var generatedValues = GenerateValueList(numberOfInitialMatches, INITIAL_BOARD_LENGTH);
-
-            for (int i = 0; i < generatedValues.Count; i++)
-            {
-                var unitSO = dict_GameBoardUnitType_SOGameBoardUnit[generatedValues[i]];
-                allUnitList[i].Initialize(this, unitSO);
-                allOccupiedUnitList.Add(allUnitList[i]);
-            }
-
-            PrintAllValidMatchesOnBoardWithSummary();
-            AssertStageMatchCount(CurrentStageNumber);
+            return pairs;
         }
 
-        public void AssertStageMatchCount(int stageNumber)
+        private List<(int, int)> GetAllMatchablePairsOnBoard(List<GameBoardUnitType?> board)
         {
-            int expectedMatches = stageNumber switch
-            {
-                1 => 3,
-                2 => 2,
-                _ => 1
-            };
-
+            List<(int, int)> validPairs = new();
             int cols = NUMBER_OF_COLUMNS;
-            int rows = allOccupiedUnitList.Count / cols;
-            HashSet<int> matchedIndices = new();
 
-            int totalMatch = 0;
-
-            for (int i = 0; i < allOccupiedUnitList.Count; i++)
+            for (int i = 0; i < board.Count; i++)
             {
-                if (matchedIndices.Contains(i)) continue;
-                var unitA = allOccupiedUnitList[i];
-                if (!unitA.IsOccupied()) continue;
-
+                if (board[i] == null) continue;
                 int rowA = i / cols;
                 int colA = i % cols;
+                var typeA = board[i].Value;
 
-                for (int j = i + 1; j < allOccupiedUnitList.Count; j++)
+                for (int j = i + 1; j < board.Count; j++)
                 {
-                    if (matchedIndices.Contains(j)) continue;
-                    var unitB = allOccupiedUnitList[j];
-                    if (!unitB.IsOccupied()) continue;
+                    if (board[j] == null) continue;
+                    var typeB = board[j].Value;
+
+                    if (!AreUnitTypeValuesMatchable(typeA, typeB)) continue;
 
                     int rowB = j / cols;
                     int colB = j % cols;
-
-                    if (!AreUnitTypeValuesMatchable(unitA.UnitSO.type, unitB.UnitSO.type)) continue;
-
-                    MatchType matchType = GetMatchType(allOccupiedUnitList, rowA, colA, rowB, colB);
-                    if (matchType == MatchType.None) continue;
-
-                    matchedIndices.Add(i);
-                    matchedIndices.Add(j);
-                    totalMatch++;
-                    break;
+                    var matchType = GetMatchType(board, rowA, colA, rowB, colB);
+                    if (matchType != MatchType.None)
+                        validPairs.Add((i, j));
                 }
             }
 
-            if (totalMatch == expectedMatches)
-            {
-                Debug.Log($"✅ Stage {stageNumber} PASSED: Exactly {totalMatch} matchable pairs found.");
-            }
-            else
-            {
-                Debug.LogWarning($"❌ Stage {stageNumber} FAILED: Found {totalMatch} matchable pairs, expected {expectedMatches}.");
-            }
+            return validPairs;
         }
 
-        public void PrintAllValidMatchesOnBoardWithSummary()
+        private MatchType GetMatchType(List<GameBoardUnitType?> board, int rowA, int colA, int rowB, int colB)
         {
             int cols = NUMBER_OF_COLUMNS;
-            int rows = allOccupiedUnitList.Count / cols;
-            HashSet<int> matchedIndices = new(); // ✅ ngăn trùng unit
-            HashSet<(int, int)> printed = new();
+            int indexA = rowA * cols + colA;
+            int indexB = rowB * cols + colB;
+            if (indexA < 0 || indexB < 0 || indexA >= board.Count || indexB >= board.Count)
+                return MatchType.None;
 
-            int totalMatch = 0;
-            Dictionary<MatchType, int> matchCountByType = new();
-
-            foreach (MatchType type in Enum.GetValues(typeof(MatchType)))
+            if (rowA == rowB)
             {
-                if (type != MatchType.None)
-                    matchCountByType[type] = 0;
+                for (int c = Math.Min(colA, colB) + 1; c < Math.Max(colA, colB); c++)
+                    if (board[rowA * cols + c] != null) return MatchType.None;
+                return MatchType.HasClearPathBetween;
             }
 
-            for (int i = 0; i < allOccupiedUnitList.Count; i++)
+            if (colA == colB)
             {
-                if (matchedIndices.Contains(i)) continue; // ⛔ đã tham gia match
-                var unitA = allOccupiedUnitList[i];
-                if (!unitA.IsOccupied()) continue;
+                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
+                    if (board[r * cols + colA] != null) return MatchType.None;
+                return MatchType.Vertical;
+            }
 
-                int rowA = i / cols;
-                int colA = i % cols;
-
-                for (int j = i + 1; j < allOccupiedUnitList.Count; j++)
+            if ((rowA - colA) == (rowB - colB))
+            {
+                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
                 {
-                    if (matchedIndices.Contains(j)) continue; // ⛔ đã match
-                    var unitB = allOccupiedUnitList[j];
-                    if (!unitB.IsOccupied()) continue;
-
-                    int rowB = j / cols;
-                    int colB = j % cols;
-
-                    if (!AreUnitTypeValuesMatchable(unitA.UnitSO.type, unitB.UnitSO.type)) continue;
-
-                    MatchType matchType = GetMatchType(allOccupiedUnitList, rowA, colA, rowB, colB);
-                    if (matchType == MatchType.None) continue;
-
-                    var key = (i, j);
-                    if (!printed.Contains(key))
-                    {
-                        printed.Add(key);
-                        matchedIndices.Add(i); // ✅ Đánh dấu đã match
-                        matchedIndices.Add(j);
-                        totalMatch++;
-                        matchCountByType[matchType]++;
-                        string log = $"✅ {unitA.UnitSO.type} matched with {unitB.UnitSO.type} at ({rowA},{colA}) ↔ ({rowB},{colB}) [{matchType}]";
-                        Debug.Log(log);
-                        break; // ⛔ Dừng loop sau khi match thành công
-                    }
+                    int c = r - (rowA - colA);
+                    int idx = r * cols + c;
+                    if (idx >= 0 && idx < board.Count && board[idx] != null) return MatchType.None;
                 }
+                return MatchType.MainDiagonal;
             }
 
-            Debug.Log("📊 === MATCH SUMMARY ===");
-            Debug.Log($"🔢 Total Valid Matchable Pairs: {totalMatch}");
-            foreach (var kvp in matchCountByType)
+            if ((rowA + colA) == (rowB + colB))
             {
-                Debug.Log($"• {kvp.Key}: {kvp.Value}");
+                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
+                {
+                    int c = (rowA + colA) - r;
+                    int idx = r * cols + c;
+                    if (idx >= 0 && idx < board.Count && board[idx] != null) return MatchType.None;
+                }
+                return MatchType.SecondaryDiagonal;
             }
-            Debug.Log("========================");
+
+            return MatchType.None;
         }
 
         private MatchType GetMatchType(List<GameBoardUnit> listUnit, int rowA, int colA, int rowB, int colB)
@@ -542,66 +698,6 @@ namespace NumMatch
             return MatchType.None;
         }
 
-        private bool AreUnitTypeValuesMatchable(GameBoardUnitType a, GameBoardUnitType b)
-        {
-            if (a == b) return true;
-            int va = dict_GameBoardUnitType_SOGameBoardUnit[a].value;
-            int vb = dict_GameBoardUnitType_SOGameBoardUnit[b].value;
-            return (va + vb) == MATCH_TOTAL_VALUE;
-        }
-
-        public GameBoardUnit SpawnUnit()
-        {
-            var unit = Instantiate(unitPrefab, contentTransform);
-            return unit.GetComponent<GameBoardUnit>();
-        }
-
-        public void OnAUnitClicked(GameBoardUnit chosenUnit)
-        {
-            if (selectedUnitList.Count >= 2)
-            {
-                ClearSelectedUnitList();
-                return;
-            }
-
-            if (selectedUnitList.Contains(chosenUnit))
-            {
-                //if click on the same tile
-                ClearSelectedUnitList();
-                return;
-            }
-
-            if (selectedUnitList.Count < 2)
-            {
-                selectedUnitList.Add(chosenUnit);
-                chosenUnit.ToggleSelected(true);
-            }
-
-            if (selectedUnitList.Count < 2)
-            {
-                return;
-            }
-
-            if (GetMatchTypeFromSelectedUnits() == MatchType.None)
-            {
-                ClearSelectedUnitList();
-                return;
-            }
-            else
-            {
-                HandleValidMatch();
-            }
-        }
-
-        private void ClearSelectedUnitList()
-        {
-            foreach (var unit in selectedUnitList)
-            {
-                unit.ToggleSelected(false);
-            }
-            selectedUnitList.Clear();
-        }
-
         private MatchType GetMatchTypeFromSelectedUnits()
         {
             if (selectedUnitList.Count < 2)
@@ -632,103 +728,49 @@ namespace NumMatch
             int colB = indexB % NUMBER_OF_COLUMNS;
 
             return GetMatchType(allOccupiedUnitList, rowA, colA, rowB, colB);
+        }
 
-            ////Case on the path from left to right, there is no blocked tile
-            //bool blocked = false;
-            //int startIndex = Mathf.Min(indexA, indexB) + 1;
-            //int endIndex = Mathf.Max(indexA, indexB) - 1;
-            //for (int betweenUnitIndex = startIndex; betweenUnitIndex <= endIndex; betweenUnitIndex++)
-            //{
-            //    if (allUnitList[betweenUnitIndex].IsOccupied())
-            //    {
-            //        blocked = true;
-            //        break;
-            //    }
-            //}
+        private MatchType GetRandomMatchType()
+        {
+            var values = new[] {
+                MatchType.HasClearPathBetween,
+                MatchType.Vertical,
+                MatchType.MainDiagonal,
+                MatchType.SecondaryDiagonal
+            };
+            return values[UnityEngine.Random.Range(0, values.Length)];
+        }
 
-            //if (!blocked)
-            //{
-            //    //Debug.Log("✅ Match: Cùng hàng và không bị chặn");
-            //    return MatchType.HasClearPathBetween;
-            //}
+        private (int indexA, int indexB)? GetValidMatchIndexPair(MatchType type, HashSet<int> usedIndices, int listUnitOnBoardLength)
+        {
+            int cols = NUMBER_OF_COLUMNS;
+            int rows = listUnitOnBoardLength / cols;
+            var rng = new System.Random();
 
-            ////Case on the same column
-            //if (colA == colB)
-            //{
-            //    int startCol = Mathf.Min(rowA, rowB) + 1;
-            //    int endCol = Mathf.Max(rowA, rowB) - 1;
-            //    blocked = false;
+            for (int attempt = 0; attempt < 100; attempt++)
+            {
+                int row = rng.Next(rows);
+                int col = rng.Next(cols);
+                int indexA = row * cols + col;
+                int indexB = -1;
 
-            //    for (int betweenRowIndex = startCol; betweenRowIndex <= endCol; betweenRowIndex++)
-            //    {
-            //        int betweenUnitIndex = betweenRowIndex * NUMBER_OF_COLUMNS + colA;
-            //        if (allUnitList[betweenUnitIndex].IsOccupied())
-            //        {
-            //            blocked = true;
-            //            break;
-            //        }
-            //    }
+                switch (type)
+                {
+                    case MatchType.HasClearPathBetween:
+                        if (col < cols - 1) indexB = row * cols + (col + 1); break;
+                    case MatchType.Vertical:
+                        if (row < rows - 1) indexB = (row + 1) * cols + col; break;
+                    case MatchType.MainDiagonal:
+                        if (row < rows - 1 && col < cols - 1) indexB = (row + 1) * cols + (col + 1); break;
+                    case MatchType.SecondaryDiagonal:
+                        if (row < rows - 1 && col > 0) indexB = (row + 1) * cols + (col - 1); break;
+                }
 
-            //    if (!blocked)
-            //    {
-            //        //Debug.Log("✅ Match: Cùng cột và không bị chặn");
-            //        return MatchType.Vertical;
-            //    }
-            //}
+                if (indexB >= 0 && indexB < listUnitOnBoardLength && !usedIndices.Contains(indexA) && !usedIndices.Contains(indexB))
+                    return (indexA, indexB);
+            }
 
-            //// ✅ Chéo chính (Main Diagonal) → rowA - colA == rowB - colB
-            //if ((rowA - colA) == (rowB - colB))
-            //{
-            //    int startRow = Mathf.Min(rowA, rowB) + 1;
-            //    int endRow = Mathf.Max(rowA, rowB) - 1;
-            //    blocked = false;
-
-            //    for (int betweenRowIndex = startRow; betweenRowIndex <= endRow; betweenRowIndex++)
-            //    {
-            //        int colOffset = betweenRowIndex - (rowA - colA); // vì row - col là const trên đường chéo chính và trừ đi sẽ ra offset cần để tới column
-            //        int betweenUnitIndex = betweenRowIndex * NUMBER_OF_COLUMNS + colOffset;
-
-            //        if (allUnitList[betweenUnitIndex].IsOccupied())
-            //        {
-            //            blocked = true;
-            //            break;
-            //        }
-            //    }
-
-            //    if (!blocked)
-            //    {
-            //        //Debug.Log("✅ Match: Main diagonal và không bị chặn");
-            //        return MatchType.MainDiagonal;
-            //    }
-            //}
-
-            //// ✅ Chéo phụ (Secondary Diagonal) → rowA + colA == rowB + colB
-            //if ((rowA + colA) == (rowB + colB))
-            //{
-            //    int startRow = Mathf.Min(rowA, rowB) + 1;
-            //    int endRow = Mathf.Max(rowA, rowB) - 1;
-            //    blocked = false;
-
-            //    for (int betweenRowIndex = startRow; betweenRowIndex <= endRow; betweenRowIndex++)
-            //    {
-            //        int ColOffset = (rowA + colA) - betweenRowIndex; // vì row + col là const trên đường chéo phụ và trừ đi sẽ ra offset cần để tới column
-            //        int betweenUnitIndex = betweenRowIndex * NUMBER_OF_COLUMNS + ColOffset;
-
-            //        if (allUnitList[betweenUnitIndex].IsOccupied())
-            //        {
-            //            blocked = true;
-            //            break;
-            //        }
-            //    }
-
-            //    if (!blocked)
-            //    {
-            //        //Debug.Log("✅ Match: Secondary diagonal và không bị chặn");
-            //        return MatchType.SecondaryDiagonal;
-            //    }
-            //}
-
-            //return MatchType.None;
+            return null;
         }
 
         private void HandleValidMatch()
@@ -738,59 +780,10 @@ namespace NumMatch
                 matchedUnit.CurrentState = GameBoardUnitState.Matched;
             }
             selectedUnitList.Clear();
+
+            CurrentScore++;
+
             CheckAndClearMatchedRows();
-        }
-
-        private void CheckAndClearMatchedRows()
-        {
-            int totalRows = Mathf.CeilToInt(allOccupiedUnitList.Count / NUMBER_OF_COLUMNS);
-            List<int> listRowIndexToBeCleared = new List<int>();
-
-            for (int row = 0; row < totalRows; row++)
-            {
-                if (!allOccupiedUnitList[row * NUMBER_OF_COLUMNS].IsMatched())
-                {
-                    // if the first tile is not a matched one, then no need to go further, this also apply for rows used for padding (UnInitialized)
-                    continue;
-                }
-
-                bool isAllUnitsInRowMatched = true;
-
-                for (int col = 1; col < NUMBER_OF_COLUMNS; col++)
-                {
-                    int index = row * NUMBER_OF_COLUMNS + col;
-                    if (allOccupiedUnitList[index].IsOccupied())
-                    {
-                        isAllUnitsInRowMatched = false;
-                        break;
-                    }
-                }
-
-                if (isAllUnitsInRowMatched)
-                {
-                    Debug.Log($"Row {row} is empty → add to clear list");
-                    listRowIndexToBeCleared.Add(row);
-                }
-            }
-            Debug.Log($"Clearing empty rows");
-            StartCoroutine(ClearMultipleRows(listRowIndexToBeCleared));
-        }
-
-        private IEnumerator ClearMultipleRows(List<int> rowsToClear)
-        {
-            foreach (var row in rowsToClear)
-            {
-                for (int col = 0; col < NUMBER_OF_COLUMNS; col++)
-                {
-                    int index = row * NUMBER_OF_COLUMNS + col;
-                    var unit = allOccupiedUnitList[index];
-                    unit.OnBeClearedFromBoard();
-                }
-            }
-
-            yield return new WaitForSeconds(0.5f); // animation delay
-
-            ShiftRowsBelowUp_MultipleRows(rowsToClear);
         }
 
         private void ShiftRowsBelowUp_MultipleRows(List<int> rowsToClear)
@@ -847,6 +840,46 @@ namespace NumMatch
                     //unit.MoveToIndex(index);
                 }
             }
+        }
+
+        // số dòng thêm để scroll
+        private void SpawnEmptyGrid()
+        {
+            int boardMinimalNumberOfUnits = CalculateMinimalBoardGridLength();
+            Debug.Log("Min board size based on viewport: " + boardMinimalNumberOfUnits / 9);
+            for (int i = 0; i < boardMinimalNumberOfUnits; i++)
+            {
+                var unit = SpawnUnit();
+                allUnitList.Add(unit);
+            }
+        }
+
+        private void Start()
+        {
+            StartCoroutine(InitializeBoardRoutine());
+        }
+
+        private bool WouldCreateExtraMatch(List<GameBoardUnitType?> board, int index, GameBoardUnitType newType)
+        {
+            int cols = NUMBER_OF_COLUMNS;
+            int row = index / cols;
+            int col = index % cols;
+
+            for (int i = 0; i < board.Count; i++)
+            {
+                if (i == index || board[i] == null) continue;
+                var otherType = board[i].Value;
+
+                if (!AreUnitTypeValuesMatchable(newType, otherType)) continue;
+
+                int otherRow = i / cols;
+                int otherCol = i % cols;
+
+                if (GetMatchType(board, row, col, otherRow, otherCol) != MatchType.None)
+                    return true;
+            }
+
+            return false;
         }
     }
 }

@@ -90,10 +90,6 @@ namespace NumMatch
             m_currentState = GameBoardUnitState.UnInitialized;
         }
 
-        private void Start()
-        {
-        }
-
         public void Initialize(GameBoard board, SOGameBoardUnit unitSO)
         {
             this.board = board;
@@ -120,6 +116,11 @@ namespace NumMatch
         {
             return CurrentState != GameBoardUnitState.UnInitialized &&
                 CurrentState != GameBoardUnitState.Matched;
+        }
+
+        public bool IsUnitialized()
+        {
+            return CurrentState == GameBoardUnitState.UnInitialized;
         }
 
         public bool IsMatched()
