@@ -121,7 +121,8 @@ namespace NumMatch
                     continue;
                 }
 
-                unit.Initialize(this, newUnitSOs[j]);
+                //unit.Initialize(this, newUnitSOs[j]);
+                unit.Initialize(this, dict_GameBoardUnitType_SOGameBoardUnit[GameBoardUnitType.One]);
                 allOccupiedUnitList.Add(unit);
                 j++;
             }
@@ -350,15 +351,18 @@ namespace NumMatch
             Destroy(temp);
 
             // Get spacing từ layout group
-            var layoutGroup = scrollViewContent.GetComponent<VerticalLayoutGroup>();
-            float spacing = layoutGroup != null ? layoutGroup.spacing : 0f;
+            var layoutGroup = scrollViewContent.GetComponent<GridLayoutGroup>();
+            float spacing = layoutGroup != null ? layoutGroup.spacing.x : 0f;
 
             float fullRowHeight = unitHeight + spacing;
             float viewportHeight = scrollViewport.rect.height;
 
             int numberOfRows = Mathf.CeilToInt(viewportHeight / fullRowHeight);
 
-            return (numberOfRows + PADDING_ROWS) * NUMBER_OF_COLUMNS;
+            Debug.Log($"Unit height = {unitHeight}, spacing = {spacing}, viewport = {viewportHeight}, fullRowHeight = {fullRowHeight}");
+
+
+            return (numberOfRows) * NUMBER_OF_COLUMNS;
         }
 
 
@@ -446,7 +450,8 @@ namespace NumMatch
             for (int i = 0; i < generatedValues.Count; i++)
             {
                 var unitSO = dict_GameBoardUnitType_SOGameBoardUnit[generatedValues[i]];
-                allUnitList[i].Initialize(this, unitSO);
+                //allUnitList[i].Initialize(this, unitSO);
+                allUnitList[i].Initialize(this, dict_GameBoardUnitType_SOGameBoardUnit[GameBoardUnitType.One]);
                 allOccupiedUnitList.Add(allUnitList[i]);
             }
 
