@@ -112,7 +112,7 @@ namespace NumMatch
             CurrentState = GameBoardUnitState.Initialized;
             button.onClick.AddListener(() =>
             {
-                board.OnAUnitClicked(this);
+                board.HandlePlayerSelectingAUnit(this);
             });
         }
 

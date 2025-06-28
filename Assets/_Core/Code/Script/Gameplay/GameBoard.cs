@@ -33,7 +33,7 @@ namespace NumMatch
         public const int NUMBER_OF_COLUMNS = 9;
         public const int RETRY_LIMIT_GENERATE_BOARD = 50;
         public const int PADDING_ROWS = 3;
-        public const int INITIAL_ADD_NUMBER_ATTEMPTS = -1;
+        public const int INITIAL_ADD_NUMBER_ATTEMPTS = 6;
 
         private GameState m_currentGameState;
 
@@ -54,6 +54,9 @@ namespace NumMatch
         public event EventHandler OnCurrentScoreChanged;
 
         public event EventHandler OnCurrentStageNumberChanged;
+        public event EventHandler OnPlayerClickedAUnit;
+        public event EventHandler OnAPairMatched;
+        public event EventHandler OnARowCleared;
 
         private List<GameBoardUnit> allOccupiedUnitList;
         private List<GameBoardUnit> allUnitList;
@@ -104,7 +107,7 @@ namespace NumMatch
             }
         }
 
-        public void OnPlayerClickedAddMoreNumber()
+        public void HandleAddMoreNumberRequest()
         {
             if (AddNumberAttemptsLeft <= 0)
                 return;
@@ -281,13 +284,16 @@ namespace NumMatch
             CurrentGameState = GameState.Idle;
         }
 
-        public void OnAUnitClicked(GameBoardUnit chosenUnit)
+        public void HandlePlayerSelectingAUnit(GameBoardUnit chosenUnit)
         {
             if (CurrentGameState != GameState.Idle)
             {
                 Debug.Log("clicked units are being handled for matching or game is over, can not click unit while doing that!");
                 return;
             }
+
+            OnPlayerClickedAUnit?.Invoke(this, EventArgs.Empty);
+
 
             if (selectedUnitList.Count >= 2)
             {
@@ -530,6 +536,7 @@ namespace NumMatch
 
         private IEnumerator ClearMultipleRows(List<int> rowsToClear)
         {
+
             foreach (var row in rowsToClear)
             {
                 for (int col = 0; col < NUMBER_OF_COLUMNS; col++)
@@ -545,6 +552,7 @@ namespace NumMatch
                 }
             }
 
+            OnARowCleared?.Invoke(this, EventArgs.Empty);
             yield return new WaitForSeconds(0.5f); // animation delay
             AddScore(rowsToClear.Count);
 
@@ -980,6 +988,7 @@ namespace NumMatch
             selectedUnitList.Clear();
 
             AddScore(1);
+            OnAPairMatched?.Invoke(this, EventArgs.Empty);
 
             yield return StartCoroutine(CheckAndHandleMatchedRows());
             TryAdvanceStageIfCleared();

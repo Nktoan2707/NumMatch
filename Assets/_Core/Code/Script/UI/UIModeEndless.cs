@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -23,6 +24,8 @@ namespace NumMatch
         [SerializeField] private Button retryButton;
         [SerializeField] private TextMeshProUGUI finalizedScoreText;
 
+        [SerializeField] private List<AudioClip> clickButtonSoundList;
+
         private void Start()
         {
             currentStageText.text = $"Stage: {GameBoard.Instance.CurrentStageNumber}";
@@ -35,16 +38,21 @@ namespace NumMatch
             homeButton.onClick.AddListener(() =>
             {
                 Debug.Log("Load home screen!");
+                SoundManager.Instance.PlaySoundEffect(clickButtonSoundList);
             });
 
             settingsButton.onClick.AddListener(() =>
             {
                 Debug.Log("Popup settings UI!");
+                SoundManager.Instance.PlaySoundEffect(clickButtonSoundList);
+
             });
 
             addMoreNumbersButton.onClick.AddListener(() =>
             {
-                GameBoard.Instance.OnPlayerClickedAddMoreNumber();
+                GameBoard.Instance.HandleAddMoreNumberRequest();
+                SoundManager.Instance.PlaySoundEffect(clickButtonSoundList);
+
             });
 
             ToggleGameOverUI(false);
@@ -62,6 +70,7 @@ namespace NumMatch
             retryButton.onClick.RemoveAllListeners();
             retryButton.onClick.AddListener(() => {
                 GameBoard.Instance.RestartGame();
+                SoundManager.Instance.PlaySoundEffect(clickButtonSoundList);
             });
         }
 
@@ -83,7 +92,7 @@ namespace NumMatch
                     break;
                 case GameState.GameOver:
                     ToggleGameOverUI(true);
-
+                    SetUIGameOver();
                     break;
             }
         }
