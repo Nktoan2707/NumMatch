@@ -56,6 +56,8 @@ namespace NumMatch
             }
         }
 
+
+
         public int CurrentScore
         {
             get { return m_currentScore; }
@@ -64,6 +66,11 @@ namespace NumMatch
                 m_currentScore = value;
                 OnCurrentScoreChanged?.Invoke(this, EventArgs.Empty);
             }
+        }
+
+        private void AddScore(int basePoint)
+        {
+            CurrentScore += basePoint * CurrentStageNumber;
         }
 
         public int CurrentStageNumber
@@ -122,19 +129,19 @@ namespace NumMatch
                     continue;
                 }
 
-                //unit.Initialize(this, newUnitSOs[j]);
-                unit.Initialize(this, dict_GameBoardUnitType_SOGameBoardUnit[GameBoardUnitType.One]);
+                unit.Initialize(this, newUnitSOs[j]);
+                //unit.Initialize(this, dict_GameBoardUnitType_SOGameBoardUnit[GameBoardUnitType.One]);
                 allOccupiedUnitList.Add(unit);
                 j++;
             }
 
             AddNumberAttemptsLeft--;
 
-            Debug.Log("📦 AllUnitList (Full Grid View with States):");
-            PrintUnitGridWithState(allUnitList);
+            //Debug.Log("📦 AllUnitList (Full Grid View with States):");
+            //PrintUnitGridWithState(allUnitList);
 
-            Debug.Log("📊 AllOccupiedUnitList (Logical View with States):");
-            PrintUnitGridWithState(allOccupiedUnitList);
+            //Debug.Log("📊 AllOccupiedUnitList (Logical View with States):");
+            //PrintUnitGridWithState(allOccupiedUnitList);
         }
 
         private string Shorten(string state)
@@ -278,6 +285,8 @@ namespace NumMatch
                 return;
             }
 
+
+
             if (GetMatchTypeFromSelectedUnits() == MatchType.None)
             {
                 ClearSelectedUnitList();
@@ -287,6 +296,9 @@ namespace NumMatch
             {
                 HandleValidMatch();
             }
+
+            //test 
+            //HandleValidMatch();
         }
 
         public void PrintAllValidMatchesOnBoardWithSummary()
@@ -414,32 +426,32 @@ namespace NumMatch
 
         private void CheckAndClearMatchedRows()
         {
-            int totalRows = Mathf.CeilToInt(allOccupiedUnitList.Count / NUMBER_OF_COLUMNS);
-            List<int> listRowIndexToBeCleared = new List<int>();
+            int totalUnits = allOccupiedUnitList.Count;
+            int totalRows = Mathf.CeilToInt((float)totalUnits / NUMBER_OF_COLUMNS);
+            List<int> listRowIndexToBeCleared = new();
 
             for (int row = 0; row < totalRows; row++)
             {
-                if (!allOccupiedUnitList[row * NUMBER_OF_COLUMNS].IsMatched())
-                {
-                    // if the first tile is not a matched one, then no need to go further, this also apply for rows used for padding (UnInitialized)
+                int rowStart = row * NUMBER_OF_COLUMNS;
+                int rowEnd = Mathf.Min(rowStart + NUMBER_OF_COLUMNS, totalUnits);
+
+                // Nếu unit đầu tiên không matched → skip nhanh
+                if (!allOccupiedUnitList[rowStart].IsMatched())
                     continue;
-                }
 
-                bool isAllUnitsInRowMatched = true;
-
-                for (int col = 1; col < NUMBER_OF_COLUMNS; col++)
+                bool isAllMatched = true;
+                for (int i = rowStart; i < rowEnd; i++)
                 {
-                    int index = row * NUMBER_OF_COLUMNS + col;
-                    if (allOccupiedUnitList[index].IsOccupied())
+                    if (allOccupiedUnitList[i].IsOccupied())
                     {
-                        isAllUnitsInRowMatched = false;
+                        isAllMatched = false;
                         break;
                     }
                 }
 
-                if (isAllUnitsInRowMatched)
+                if (isAllMatched)
                 {
-                    Debug.Log($"Row {row} is empty → add to clear list");
+                    Debug.Log($"✅ Row {row} is matched (length: {rowEnd - rowStart}) → Add to clear list");
                     listRowIndexToBeCleared.Add(row);
                 }
             }
@@ -450,6 +462,8 @@ namespace NumMatch
             }
         }
 
+
+
         private IEnumerator ClearMultipleRows(List<int> rowsToClear)
         {
             foreach (var row in rowsToClear)
@@ -457,15 +471,27 @@ namespace NumMatch
                 for (int col = 0; col < NUMBER_OF_COLUMNS; col++)
                 {
                     int index = row * NUMBER_OF_COLUMNS + col;
+                    if (index >= allOccupiedUnitList.Count)
+                    {
+                        break;
+                    }
+
                     var unit = allOccupiedUnitList[index];
                     unit.OnBeClearedFromBoard();
                 }
             }
 
             yield return new WaitForSeconds(0.5f); // animation delay
-            CurrentScore += rowsToClear.Count;
+            AddScore(rowsToClear.Count);
 
             ShiftRowsBelowUp(rowsToClear);
+            CheckClearResidualRows();
+            TryAdvanceStageIfCleared();
+
+        }
+
+        private void CheckClearResidualRows()
+        {
         }
 
         private void ClearSelectedUnitList()
@@ -481,7 +507,8 @@ namespace NumMatch
         {
             if (CurrentStageNumber < 1)
             {
-                Debug.LogError("stage number can not be less than 1!");
+                Debug.LogError("❌ Stage number can not be less than 1!");
+                return;
             }
 
             int numberOfInitialMatches = CurrentStageNumber switch
@@ -491,19 +518,34 @@ namespace NumMatch
                 _ => 1,
             };
 
+            Debug.Log($"🚀 Generating board for Stage {CurrentStageNumber}");
+            Debug.Log($"🔢 Required initial match pairs: {numberOfInitialMatches}");
+
             var generatedValues = GenerateValueList(numberOfInitialMatches, INITIAL_BOARD_LENGTH);
+
+            Debug.Log("🎲 Generated values:");
+            for (int i = 0; i < generatedValues.Count; i++)
+            {
+                Debug.Log($"• Index {i}: {generatedValues[i]}");
+            }
 
             for (int i = 0; i < generatedValues.Count; i++)
             {
                 var unitSO = dict_GameBoardUnitType_SOGameBoardUnit[generatedValues[i]];
-                //allUnitList[i].Initialize(this, unitSO);
-                allUnitList[i].Initialize(this, dict_GameBoardUnitType_SOGameBoardUnit[GameBoardUnitType.One]);
+                allUnitList[i].Initialize(this, unitSO);
+                //allUnitList[i].Initialize(this, dict_GameBoardUnitType_SOGameBoardUnit[GameBoardUnitType.One]);
+
                 allOccupiedUnitList.Add(allUnitList[i]);
+
+                Debug.Log($"✅ Initialized unit at index {i}: {unitSO.type} ({unitSO.value})");
             }
 
-            PrintAllValidMatchesOnBoardWithSummary();
+            Debug.Log($"📦 Total units on board: {allOccupiedUnitList.Count}");
+
+            // Kiểm tra lại số lượng cặp match hợp lệ
             AssertStageMatchCount(CurrentStageNumber);
         }
+
 
         private List<GameBoardUnitType> GenerateValueList(int numMatchPairs, int targetTotal)
         {
@@ -692,58 +734,97 @@ namespace NumMatch
         {
             int cols = NUMBER_OF_COLUMNS;
 
-            // Cùng hàng
-            if (rowA == rowB)
+            int indexA = rowA * cols + colA;
+            int indexB = rowB * cols + colB;
+
+            // 👉 1. Match cùng hàng (row)
+            int start = Mathf.Min(indexA, indexB) + 1;
+            int end = Mathf.Max(indexA, indexB) - 1;
+            bool isBlocked = false;
+
+            for (int i = start; i <= end; i++)
             {
-                int start = Math.Min(colA, colB) + 1;
-                int end = Math.Max(colA, colB) - 1;
-                for (int c = start; c <= end; c++)
+                if (listUnit[i].IsOccupied())
                 {
-                    int index = rowA * cols + c;
-                    if (listUnit[index].IsOccupied()) return MatchType.None;
+                    isBlocked = true;
+                    break;
                 }
+            }
+
+            if (!isBlocked)
+            {
                 return MatchType.HasClearPathBetween;
             }
 
-            // Cùng cột
+            // 👉 2. Match cùng cột (column)
             if (colA == colB)
             {
-                int start = Math.Min(rowA, rowB) + 1;
-                int end = Math.Max(rowA, rowB) - 1;
-                for (int r = start; r <= end; r++)
+                int startRow = Mathf.Min(rowA, rowB) + 1;
+                int endRow = Mathf.Max(rowA, rowB) - 1;
+                isBlocked = false;
+
+                for (int r = startRow; r <= endRow; r++)
                 {
-                    int index = r * cols + colA;
-                    if (listUnit[index].IsOccupied()) return MatchType.None;
+                    int betweenIndex = r * cols + colA;
+                    if (listUnit[betweenIndex].IsOccupied())
+                    {
+                        isBlocked = true;
+                        break;
+                    }
                 }
-                return MatchType.Vertical;
+
+                if (!isBlocked)
+                {
+                    return MatchType.Vertical;
+                }
             }
 
-            // Main Diagonal
+            // 👉 3. Match chéo chính (Main Diagonal): row - col là hằng số
             if ((rowA - colA) == (rowB - colB))
             {
-                int start = Math.Min(rowA, rowB) + 1;
-                int end = Math.Max(rowA, rowB) - 1;
-                for (int r = start; r <= end; r++)
+                int startRow = Mathf.Min(rowA, rowB) + 1;
+                int endRow = Mathf.Max(rowA, rowB) - 1;
+                isBlocked = false;
+
+                for (int r = startRow; r <= endRow; r++)
                 {
                     int c = r - (rowA - colA);
-                    int index = r * cols + c;
-                    if (listUnit[index].IsOccupied()) return MatchType.None;
+                    int betweenIndex = r * cols + c;
+                    if (listUnit[betweenIndex].IsOccupied())
+                    {
+                        isBlocked = true;
+                        break;
+                    }
                 }
-                return MatchType.MainDiagonal;
+
+                if (!isBlocked)
+                {
+                    return MatchType.MainDiagonal;
+                }
             }
 
-            // Secondary Diagonal
+            // 👉 4. Match chéo phụ (Secondary Diagonal): row + col là hằng số
             if ((rowA + colA) == (rowB + colB))
             {
-                int start = Math.Min(rowA, rowB) + 1;
-                int end = Math.Max(rowA, rowB) - 1;
-                for (int r = start; r <= end; r++)
+                int startRow = Mathf.Min(rowA, rowB) + 1;
+                int endRow = Mathf.Max(rowA, rowB) - 1;
+                isBlocked = false;
+
+                for (int r = startRow; r <= endRow; r++)
                 {
                     int c = (rowA + colA) - r;
-                    int index = r * cols + c;
-                    if (listUnit[index].IsOccupied()) return MatchType.None;
+                    int betweenIndex = r * cols + c;
+                    if (listUnit[betweenIndex].IsOccupied())
+                    {
+                        isBlocked = true;
+                        break;
+                    }
                 }
-                return MatchType.SecondaryDiagonal;
+
+                if (!isBlocked)
+                {
+                    return MatchType.SecondaryDiagonal;
+                }
             }
 
             return MatchType.None;
@@ -832,9 +913,23 @@ namespace NumMatch
             }
             selectedUnitList.Clear();
 
-            CurrentScore++;
+            AddScore(1);
 
             CheckAndClearMatchedRows();
+        }
+
+        private void TryAdvanceStageIfCleared()
+        {
+            if (allOccupiedUnitList.Count > 0)
+            {
+                Debug.Log($"CheckClearStage: {allOccupiedUnitList.Count}");
+
+                return;
+            }
+
+            //CurrentScore++;
+            CurrentStageNumber++;
+            GenerateRandomBoard();
         }
 
         private void ShiftRowsBelowUp(List<int> rowsToClear)
@@ -916,7 +1011,7 @@ namespace NumMatch
                     if (foundIndex != -1)
                     {
                         allOccupiedUnitList[foundIndex] = null;
-                        Debug.Log($"🔻 Removed unit at index {foundIndex} in occupied list: {unit.name}");
+                        //Debug.Log($"🔻 Removed unit at index {foundIndex} in occupied list: {unit.name}");
                     }
                 }
             }
@@ -932,7 +1027,7 @@ namespace NumMatch
         private void SpawnEmptyGrid()
         {
             int boardMinimalNumberOfUnits = CalculateMinimalBoardGridLength();
-            Debug.Log("Min board size based on viewport: " + boardMinimalNumberOfUnits / 9);
+            Debug.Log("Min board size based on viewport: " + boardMinimalNumberOfUnits / NUMBER_OF_COLUMNS);
             for (int i = 0; i < boardMinimalNumberOfUnits; i++)
             {
                 var unit = SpawnUnit();
