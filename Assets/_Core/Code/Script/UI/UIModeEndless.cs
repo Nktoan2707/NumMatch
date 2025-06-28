@@ -16,6 +16,13 @@ namespace NumMatch
         [SerializeField] private Button addMoreNumbersButton;
         [SerializeField] private TextMeshProUGUI attemptsLeftDisplayNumber;
 
+
+
+
+        [SerializeField] private GameObject gameOverUI;
+        [SerializeField] private Button retryButton;
+        [SerializeField] private TextMeshProUGUI finalizedScoreText;
+
         private void Start()
         {
             currentStageText.text = $"Stage: {GameBoard.Instance.CurrentStageNumber}";
@@ -24,6 +31,7 @@ namespace NumMatch
             GameBoard.Instance.OnAddNumberAttemptsLeftChanged += GameBoard_OnAddNumberAttemptsLeftChanged;
             GameBoard.Instance.OnCurrentScoreChanged += GameBoard_OnCurrentScoreChanged;
             GameBoard.Instance.OnCurrentStageNumberChanged += GameBoard_OnCurrentStageNumberChanged;
+            GameBoard.Instance.OnCurrentGameStateChanged += GameBoard_OnCurrentGameStateChanged;
             homeButton.onClick.AddListener(() =>
             {
                 Debug.Log("Load home screen!");
@@ -38,6 +46,46 @@ namespace NumMatch
             {
                 GameBoard.Instance.OnPlayerClickedAddMoreNumber();
             });
+
+            ToggleGameOverUI(false);
+            SetUIGameOver();
+        }
+
+        private void ToggleGameOverUI(bool doesShow)
+        {
+            gameOverUI.SetActive(doesShow);
+        }
+
+        private void SetUIGameOver()
+        {
+            finalizedScoreText.text = $"{GameBoard.Instance.CurrentScore}";
+            retryButton.onClick.RemoveAllListeners();
+            retryButton.onClick.AddListener(() => {
+                GameBoard.Instance.RestartGame();
+            });
+        }
+
+        private void GameBoard_OnCurrentGameStateChanged(object sender, System.EventArgs e)
+        {
+            switch (GameBoard.Instance.CurrentGameState)
+            {
+                case GameState.UnInitialized:
+                    ToggleGameOverUI(false);
+                    break;
+                case GameState.Idle:
+                    ToggleGameOverUI(false);
+
+
+                    break;
+                case GameState.MatchingUnits:
+                    ToggleGameOverUI(false);
+
+                    break;
+                case GameState.GameOver:
+                    ToggleGameOverUI(true);
+
+                    break;
+            }
         }
 
         private void GameBoard_OnCurrentStageNumberChanged(object sender, System.EventArgs e)

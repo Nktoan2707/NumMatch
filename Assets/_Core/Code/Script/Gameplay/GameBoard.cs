@@ -2,11 +2,20 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace NumMatch
 {
+    public enum GameState
+    {
+        UnInitialized,
+        Idle,
+        MatchingUnits,
+        GameOver,
+    }
+
     public enum MatchType
     {
         None,
@@ -24,7 +33,21 @@ namespace NumMatch
         public const int NUMBER_OF_COLUMNS = 9;
         public const int RETRY_LIMIT_GENERATE_BOARD = 50;
         public const int PADDING_ROWS = 3;
-        public const int INITIAL_ADD_NUMBER_ATTEMPTS = 6;
+        public const int INITIAL_ADD_NUMBER_ATTEMPTS = -1;
+
+        private GameState m_currentGameState;
+
+        public GameState CurrentGameState
+        {
+            get { return m_currentGameState; }
+            set
+            {
+                m_currentGameState = value;
+                OnCurrentGameStateChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        public event EventHandler OnCurrentGameStateChanged;
 
         public event EventHandler OnAddNumberAttemptsLeftChanged;
 
@@ -55,8 +78,6 @@ namespace NumMatch
                 OnAddNumberAttemptsLeftChanged?.Invoke(this, EventArgs.Empty);
             }
         }
-
-
 
         public int CurrentScore
         {
@@ -194,11 +215,26 @@ namespace NumMatch
                 _ => 1
             };
 
+            var matchedPairs = GetAllMatchedIndicesPairs();
+            int totalMatch = matchedPairs.Count;
+
+            if (totalMatch == expectedMatches)
+            {
+                Debug.Log($"✅ Stage {stageNumber} PASSED: Exactly {totalMatch} matchable pairs found.");
+            }
+            else
+            {
+                Debug.LogWarning($"❌ Stage {stageNumber} FAILED: Found {totalMatch} matchable pairs, expected {expectedMatches}.");
+            }
+        }
+
+        private List<(int, int)> GetAllMatchedIndicesPairs()
+        {
             int cols = NUMBER_OF_COLUMNS;
             int rows = allOccupiedUnitList.Count / cols;
-            HashSet<int> matchedIndices = new();
 
-            int totalMatch = 0;
+            List<(int, int)> matchedPairs = new();
+            HashSet<int> matchedIndices = new();
 
             for (int i = 0; i < allOccupiedUnitList.Count; i++)
             {
@@ -225,30 +261,14 @@ namespace NumMatch
 
                     matchedIndices.Add(i);
                     matchedIndices.Add(j);
-                    totalMatch++;
+                    matchedPairs.Add((i, j));
                     break;
                 }
             }
 
-            if (totalMatch == expectedMatches)
-            {
-                Debug.Log($"✅ Stage {stageNumber} PASSED: Exactly {totalMatch} matchable pairs found.");
-            }
-            else
-            {
-                Debug.LogWarning($"❌ Stage {stageNumber} FAILED: Found {totalMatch} matchable pairs, expected {expectedMatches}.");
-            }
+            return matchedPairs;
         }
 
-        public void CleanUp()
-        {
-            foreach (GameBoardUnit unit in allUnitList)
-            {
-                Destroy(unit.gameObject);
-            }
-            allUnitList.Clear();
-            allOccupiedUnitList.Clear();
-        }
 
         public IEnumerator InitializeBoardRoutine()
         {
@@ -257,10 +277,18 @@ namespace NumMatch
             GenerateRandomBoard();
 
             ToggleScrollDirection(false);
+
+            CurrentGameState = GameState.Idle;
         }
 
         public void OnAUnitClicked(GameBoardUnit chosenUnit)
         {
+            if (CurrentGameState != GameState.Idle)
+            {
+                Debug.Log("clicked units are being handled for matching or game is over, can not click unit while doing that!");
+                return;
+            }
+
             if (selectedUnitList.Count >= 2)
             {
                 ClearSelectedUnitList();
@@ -285,8 +313,6 @@ namespace NumMatch
                 return;
             }
 
-
-
             if (GetMatchTypeFromSelectedUnits() == MatchType.None)
             {
                 ClearSelectedUnitList();
@@ -294,11 +320,10 @@ namespace NumMatch
             }
             else
             {
-                HandleValidMatch();
+                StartCoroutine(HandleValidMatch());
             }
 
-            //test 
-            //HandleValidMatch();
+            //StartCoroutine(HandleValidMatch());
         }
 
         public void PrintAllValidMatchesOnBoardWithSummary()
@@ -385,6 +410,22 @@ namespace NumMatch
 
         private void Awake()
         {
+            Initialize();
+        }
+
+
+        private void Start()
+        {
+            StartGame();
+        }
+
+        public void StartGame()
+        {
+            StartCoroutine(InitializeBoardRoutine());
+        }
+
+        private void Initialize()
+        {
             if (Instance != null)
             {
                 Destroy(Instance);
@@ -397,7 +438,32 @@ namespace NumMatch
             CurrentStageNumber = INITIAL_STAGE_NUMBER;
             CurrentScore = 0;
             AddNumberAttemptsLeft = INITIAL_ADD_NUMBER_ATTEMPTS;
+            CurrentGameState = GameState.UnInitialized;
+            scrollRect.horizontal = false;
+            ToggleScrollDirection(false);
+        }
 
+        public void RestartGame()
+        {
+            CleanUp();
+            StartGame();
+        }
+
+        public void CleanUp()
+        {
+            foreach (GameBoardUnit unit in allUnitList)
+            {
+                Destroy(unit.gameObject);
+            }
+            allUnitList.Clear();
+            allOccupiedUnitList.Clear();
+            selectedUnitList.Clear();
+            allUnitList.Clear();
+            allOccupiedUnitList.Clear();
+            CurrentStageNumber = INITIAL_STAGE_NUMBER;
+            CurrentScore = 0;
+            AddNumberAttemptsLeft = INITIAL_ADD_NUMBER_ATTEMPTS;
+            CurrentGameState = GameState.UnInitialized;
             scrollRect.horizontal = false;
             ToggleScrollDirection(false);
         }
@@ -424,7 +490,7 @@ namespace NumMatch
             return (numberOfRows) * NUMBER_OF_COLUMNS;
         }
 
-        private void CheckAndClearMatchedRows()
+        private IEnumerator CheckAndHandleMatchedRows()
         {
             int totalUnits = allOccupiedUnitList.Count;
             int totalRows = Mathf.CeilToInt((float)totalUnits / NUMBER_OF_COLUMNS);
@@ -458,11 +524,9 @@ namespace NumMatch
 
             if (listRowIndexToBeCleared.Count > 0)
             {
-                StartCoroutine(ClearMultipleRows(listRowIndexToBeCleared));
+                yield return StartCoroutine(ClearMultipleRows(listRowIndexToBeCleared));
             }
         }
-
-
 
         private IEnumerator ClearMultipleRows(List<int> rowsToClear)
         {
@@ -486,8 +550,6 @@ namespace NumMatch
 
             ShiftRowsBelowUp(rowsToClear);
             CheckClearResidualRows();
-            TryAdvanceStageIfCleared();
-
         }
 
         private void CheckClearResidualRows()
@@ -540,12 +602,15 @@ namespace NumMatch
                 Debug.Log($"✅ Initialized unit at index {i}: {unitSO.type} ({unitSO.value})");
             }
 
+
+
             Debug.Log($"📦 Total units on board: {allOccupiedUnitList.Count}");
 
+            PrintAllValidMatchesOnBoardWithSummary();
             // Kiểm tra lại số lượng cặp match hợp lệ
             AssertStageMatchCount(CurrentStageNumber);
-        }
 
+        }
 
         private List<GameBoardUnitType> GenerateValueList(int numMatchPairs, int targetTotal)
         {
@@ -905,8 +970,9 @@ namespace NumMatch
             return null;
         }
 
-        private void HandleValidMatch()
+        private IEnumerator HandleValidMatch()
         {
+            CurrentGameState = GameState.MatchingUnits;
             foreach (var matchedUnit in selectedUnitList)
             {
                 matchedUnit.CurrentState = GameBoardUnitState.Matched;
@@ -915,14 +981,42 @@ namespace NumMatch
 
             AddScore(1);
 
-            CheckAndClearMatchedRows();
+            yield return StartCoroutine(CheckAndHandleMatchedRows());
+            TryAdvanceStageIfCleared();
+            CurrentGameState = GameState.Idle;
+            CheckLoseCondition();
+
+            //testing
+            var matchedPairs = GetAllMatchedIndicesPairs();
+            int totalMatch = matchedPairs.Count;
+
+            // Log danh sách chỉ số từng cặp
+            string matchInfo = string.Join(", ", matchedPairs.Select(pair => $"({pair.Item1}, {pair.Item2})"));
+
+            Debug.Log($"Remaining matchable pairs: {totalMatch} --- Add number attempts left: {AddNumberAttemptsLeft} --- Matched indices: {matchInfo}");
+        }
+
+        private void CheckLoseCondition()
+        {
+            var allMatchablePairs = GetAllMatchedIndicesPairs();
+            if (allMatchablePairs.Count > 0)
+            {
+                return;
+            }
+
+            if (AddNumberAttemptsLeft > 0)
+            {
+                return;
+            }
+
+            CurrentGameState = GameState.GameOver;
         }
 
         private void TryAdvanceStageIfCleared()
         {
             if (allOccupiedUnitList.Count > 0)
             {
-                Debug.Log($"CheckClearStage: {allOccupiedUnitList.Count}");
+                Debug.Log($"TryAdvanceStageIfCleared: {allOccupiedUnitList.Count}");
 
                 return;
             }
@@ -1035,10 +1129,6 @@ namespace NumMatch
             }
         }
 
-        private void Start()
-        {
-            StartCoroutine(InitializeBoardRoutine());
-        }
 
         private bool WouldCreateExtraMatch(List<GameBoardUnitType?> board, int index, GameBoardUnitType newType)
         {
