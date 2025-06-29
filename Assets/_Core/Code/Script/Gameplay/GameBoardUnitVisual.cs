@@ -10,8 +10,6 @@ namespace NumMatch
         [SerializeField] private GameObject selected;
         [SerializeField] private GameObject icon;
 
-
-
         private void Awake()
         {
             ToggleIcon(false);

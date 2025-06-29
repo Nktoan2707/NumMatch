@@ -3,7 +3,6 @@
 // namespace System.Collections.Generic {
 namespace Utils
 {
-
     // Licensed to the .NET Foundation under one or more agreements.
     // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -166,7 +165,6 @@ namespace Utils
     [DebuggerTypeProxy(typeof(PriorityQueueDebugView<,>))]
     public class PriorityQueue<TElement, TPriority>
     {
-
         /// <summary>
         ///     Specifies the arity of the d-ary heap, which here is quaternary.
         ///     It is assumed that this value is a power of 2.
@@ -223,10 +221,12 @@ namespace Utils
         public UnorderedItemsCollection UnorderedItems => _unorderedItems ??= new(this);
 
 #if DEBUG
+
         static PriorityQueue()
         {
             Debug.Assert(Log2Arity > 0 && Math.Pow(2, Log2Arity) == Arity);
         }
+
 #endif
 
         /// <summary>
@@ -1090,5 +1090,4 @@ namespace Utils
             }
         }
     }
-
 }

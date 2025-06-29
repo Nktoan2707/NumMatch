@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using UnityEngine;
 using Utils;
 using Debug = UnityEngine.Debug;
 
@@ -66,7 +65,6 @@ namespace NumMatch.Algorithm
             }
         }
 
-
         public static List<List<MatchStep>> FindOptimalMatchSteps(List<GameBoardUnitType> flatBoard, int numCols, GameBoardUnitType targetType, int takeUpToTop)
         {
             var initialBoard = flatBoard.Cast<GameBoardUnitType?>().ToArray();
@@ -99,12 +97,10 @@ namespace NumMatch.Algorithm
                     newBoard[idxA] = null;
                     newBoard[idxB] = null;
 
-
                     // ✅ Use board state key to prevent revisiting
                     int boardKey = GenerateBoardKey(newBoard); // hoặc GenerateBoardHash(newBoard).ToString()
                     if (seenBoardKeys.Contains(boardKey)) continue;
                     seenBoardKeys.Add(boardKey);
-
 
                     int remainingTarget = CountTarget(newBoard, targetType);
                     int g = newSteps.Count;
@@ -285,7 +281,6 @@ namespace NumMatch.Algorithm
             Debug.Log($"📝 Wrote {solutions.Count} solution(s) to output");
         }
 
-
         public static List<GameBoardUnitType> ParseInput(string filePath, int numCols, Dictionary<GameBoardUnitType, SOGameBoardUnit> dict)
         {
             string content = File.ReadAllText(filePath).Trim();
@@ -319,6 +314,5 @@ namespace NumMatch.Algorithm
             WriteOutput(outputPath, solutions);
             Debug.Log($"📤 Output written to: {outputPath}");
         }
-
     }
 }

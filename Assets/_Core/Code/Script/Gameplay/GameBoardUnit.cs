@@ -22,6 +22,7 @@ namespace NumMatch
     public class GameBoardUnit : MonoBehaviour
     {
         private SOGameBoardUnit m_unitSO;
+
         public SOGameBoardUnit UnitSO
         { get { return m_unitSO; } set { m_unitSO = value; } }
 

@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -54,8 +53,11 @@ namespace NumMatch
         public event EventHandler OnCurrentScoreChanged;
 
         public event EventHandler OnCurrentStageNumberChanged;
+
         public event EventHandler OnPlayerClickedAUnit;
+
         public event EventHandler OnAPairMatched;
+
         public event EventHandler OnARowCleared;
 
         private List<GameBoardUnit> allOccupiedUnitList;
@@ -272,7 +274,6 @@ namespace NumMatch
             return matchedPairs;
         }
 
-
         public IEnumerator InitializeBoardRoutine()
         {
             SpawnEmptyGrid();
@@ -293,7 +294,6 @@ namespace NumMatch
             }
 
             OnPlayerClickedAUnit?.Invoke(this, EventArgs.Empty);
-
 
             if (selectedUnitList.Count >= 2)
             {
@@ -419,7 +419,6 @@ namespace NumMatch
             Initialize();
         }
 
-
         private void Start()
         {
             StartGame();
@@ -536,7 +535,6 @@ namespace NumMatch
 
         private IEnumerator ClearMultipleRows(List<int> rowsToClear)
         {
-
             foreach (var row in rowsToClear)
             {
                 for (int col = 0; col < NUMBER_OF_COLUMNS; col++)
@@ -610,14 +608,11 @@ namespace NumMatch
                 Debug.Log($"✅ Initialized unit at index {i}: {unitSO.type} ({unitSO.value})");
             }
 
-
-
             Debug.Log($"📦 Total units on board: {allOccupiedUnitList.Count}");
 
             PrintAllValidMatchesOnBoardWithSummary();
             // Kiểm tra lại số lượng cặp match hợp lệ
             AssertStageMatchCount(CurrentStageNumber);
-
         }
 
         private List<GameBoardUnitType> GenerateValueList(int numMatchPairs, int targetTotal)
@@ -1190,7 +1185,6 @@ namespace NumMatch
                 allUnitList.Add(unit);
             }
         }
-
 
         private bool WouldCreateExtraMatch(List<GameBoardUnitType?> board, int index, GameBoardUnitType newType)
         {

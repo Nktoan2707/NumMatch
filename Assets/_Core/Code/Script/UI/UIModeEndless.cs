@@ -17,9 +17,6 @@ namespace NumMatch
         [SerializeField] private Button addMoreNumbersButton;
         [SerializeField] private TextMeshProUGUI attemptsLeftDisplayNumber;
 
-
-
-
         [SerializeField] private GameObject gameOverUI;
         [SerializeField] private Button retryButton;
         [SerializeField] private TextMeshProUGUI finalizedScoreText;
@@ -45,14 +42,12 @@ namespace NumMatch
             {
                 Debug.Log("Popup settings UI!");
                 SoundManager.Instance.PlaySoundEffect(clickButtonSoundList);
-
             });
 
             addMoreNumbersButton.onClick.AddListener(() =>
             {
                 GameBoard.Instance.HandleAddMoreNumberRequest();
                 SoundManager.Instance.PlaySoundEffect(clickButtonSoundList);
-
             });
 
             ToggleGameOverUI(false);
@@ -68,7 +63,8 @@ namespace NumMatch
         {
             finalizedScoreText.text = $"{GameBoard.Instance.CurrentScore}";
             retryButton.onClick.RemoveAllListeners();
-            retryButton.onClick.AddListener(() => {
+            retryButton.onClick.AddListener(() =>
+            {
                 GameBoard.Instance.RestartGame();
                 SoundManager.Instance.PlaySoundEffect(clickButtonSoundList);
             });
@@ -81,15 +77,17 @@ namespace NumMatch
                 case GameState.UnInitialized:
                     ToggleGameOverUI(false);
                     break;
+
                 case GameState.Idle:
                     ToggleGameOverUI(false);
 
-
                     break;
+
                 case GameState.MatchingUnits:
                     ToggleGameOverUI(false);
 
                     break;
+
                 case GameState.GameOver:
                     ToggleGameOverUI(true);
                     SetUIGameOver();
