@@ -759,45 +759,98 @@ namespace NumMatch
         private MatchType GetMatchType(List<GameBoardUnitType?> board, int rowA, int colA, int rowB, int colB)
         {
             int cols = NUMBER_OF_COLUMNS;
+
             int indexA = rowA * cols + colA;
             int indexB = rowB * cols + colB;
-            if (indexA < 0 || indexB < 0 || indexA >= board.Count || indexB >= board.Count)
-                return MatchType.None;
 
-            if (rowA == rowB)
+            // 👉 1. Match cùng hàng (row)
+            int start = Mathf.Min(indexA, indexB) + 1;
+            int end = Mathf.Max(indexA, indexB) - 1;
+            bool isBlocked = false;
+
+            for (int i = start; i <= end; i++)
             {
-                for (int c = Math.Min(colA, colB) + 1; c < Math.Max(colA, colB); c++)
-                    if (board[rowA * cols + c] != null) return MatchType.None;
+                if (board[i] != null)
+                {
+                    isBlocked = true;
+                    break;
+                }
+            }
+
+            if (!isBlocked)
+            {
                 return MatchType.HasClearPathBetween;
             }
 
+            // 👉 2. Match cùng cột (column)
             if (colA == colB)
             {
-                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
-                    if (board[r * cols + colA] != null) return MatchType.None;
-                return MatchType.Vertical;
+                int startRow = Mathf.Min(rowA, rowB) + 1;
+                int endRow = Mathf.Max(rowA, rowB) - 1;
+                isBlocked = false;
+
+                for (int r = startRow; r <= endRow; r++)
+                {
+                    int betweenIndex = r * cols + colA;
+                    if (board[betweenIndex] != null)
+                    {
+                        isBlocked = true;
+                        break;
+                    }
+                }
+
+                if (!isBlocked)
+                {
+                    return MatchType.Vertical;
+                }
             }
 
+            // 👉 3. Match chéo chính (Main Diagonal): row - col là hằng số
             if ((rowA - colA) == (rowB - colB))
             {
-                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
+                int startRow = Mathf.Min(rowA, rowB) + 1;
+                int endRow = Mathf.Max(rowA, rowB) - 1;
+                isBlocked = false;
+
+                for (int r = startRow; r <= endRow; r++)
                 {
                     int c = r - (rowA - colA);
-                    int idx = r * cols + c;
-                    if (idx >= 0 && idx < board.Count && board[idx] != null) return MatchType.None;
+                    int betweenIndex = r * cols + c;
+                    if (board[betweenIndex] != null)
+                    {
+                        isBlocked = true;
+                        break;
+                    }
                 }
-                return MatchType.MainDiagonal;
+
+                if (!isBlocked)
+                {
+                    return MatchType.MainDiagonal;
+                }
             }
 
+            // 👉 4. Match chéo phụ (Secondary Diagonal): row + col là hằng số
             if ((rowA + colA) == (rowB + colB))
             {
-                for (int r = Math.Min(rowA, rowB) + 1; r < Math.Max(rowA, rowB); r++)
+                int startRow = Mathf.Min(rowA, rowB) + 1;
+                int endRow = Mathf.Max(rowA, rowB) - 1;
+                isBlocked = false;
+
+                for (int r = startRow; r <= endRow; r++)
                 {
                     int c = (rowA + colA) - r;
-                    int idx = r * cols + c;
-                    if (idx >= 0 && idx < board.Count && board[idx] != null) return MatchType.None;
+                    int betweenIndex = r * cols + c;
+                    if (board[betweenIndex] != null)
+                    {
+                        isBlocked = true;
+                        break;
+                    }
                 }
-                return MatchType.SecondaryDiagonal;
+
+                if (!isBlocked)
+                {
+                    return MatchType.SecondaryDiagonal;
+                }
             }
 
             return MatchType.None;

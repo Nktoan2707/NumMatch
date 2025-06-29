@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using NumMatch.Algorithm;
+using UnityEngine;
 using UnityEngine.UI;
 
 namespace NumMatch
@@ -10,6 +11,9 @@ namespace NumMatch
         public Button initBoard;
         public Button increaseStage;
         public Button decreaseStage;
+        public Button runAlgo;
+
+        public SOGameBoardUnitList allUnitSOList;
 
         private void Awake()
         {
@@ -21,9 +25,7 @@ namespace NumMatch
         {
             initBoard.onClick.AddListener(() =>
             {
-                GameBoard.Instance.CleanUp();
-
-                StartCoroutine(GameBoard.Instance.InitializeBoardRoutine());
+                GameBoard.Instance.RestartGame();
             });
 
             decreaseStage.onClick.AddListener(() =>
@@ -35,11 +37,11 @@ namespace NumMatch
             {
                 GameBoard.Instance.CurrentStageNumber++;
             });
-        }
 
-        // Update is called once per frame
-        private void Update()
-        {
+            runAlgo.onClick.AddListener(() =>
+            {
+                MatchSolver.Run("input.txt", "output.txt", 9, allUnitSOList.ToDict(), GameBoardUnitType.Five);
+            });
         }
     }
 }

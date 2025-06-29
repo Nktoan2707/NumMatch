@@ -100,7 +100,10 @@ namespace NumMatch
                 Instance = this;
                 DontDestroyOnLoad(this.gameObject);
             }
+        }
 
+        private void Start()
+        {
             LoadSavedConfiguration();
         }
 
