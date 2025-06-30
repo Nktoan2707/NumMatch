@@ -12,6 +12,8 @@
 
 📝 Prototype được xây dựng bám sát gameplay và UI của NumMatch bản gốc, bao gồm hai chế độ chơi: **Endless Mode** và **Move Mode** (thuật toán tìm bước đi tối ưu).
 
+-   Cài đặt và chạy ứng dụng: tải bản Windows hoặc APK ở [link sau](https://drive.google.com/drive/folders/1AaezKvVoZfWMkk9PzOcODbX-wFOfKa-E?usp=sharing)
+
 ---
 
 ## II. 🎮 Chi Tiết Tính Năng (80 điểm)
